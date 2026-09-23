@@ -1,3 +1,117 @@
-h1 {
-    color: blue;
+:root {
+  --bg: #f4f1ec;
+  --card-bg: #ffffff;
+  --text: #2b2b2b;
+  --accent: #c0392b;
+  --border: #ddd6c9;
 }
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+
+.brand {
+  text-align: center;
+  font-size: 40px;
+  font-weight: 800;
+  margin: 0 0 8px;
+  letter-spacing: 1px;
+  background: linear-gradient(90deg, #ff512f, #f09819, #ff9d00, #43cea2, #185a9d, #8e2de2, #ff512f);
+  background-size: 300% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: brushShift 6s linear infinite;
+}
+
+@keyframes brushShift {
+  0% { background-position: 0% center; }
+  100% { background-position: 300% center; }
+}
+
+.brush-underline {
+  display: block;
+  width: 180px;
+  height: 14px;
+  margin: 0 auto 28px;
+  background: linear-gradient(90deg, #ff512f, #f09819, #43cea2, #185a9d, #8e2de2);
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 20'><path d='M2 12 C 40 2, 70 18, 100 8 S 160 2, 198 12' stroke='black' stroke-width='10' fill='none' stroke-linecap='round'/></svg>") center/contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 20'><path d='M2 12 C 40 2, 70 18, 100 8 S 160 2, 198 12' stroke='black' stroke-width='10' fill='none' stroke-linecap='round'/></svg>") center/contain no-repeat;
+}
+
+h1 {
+  text-align: center;
+  color: var(--accent);
+  margin: 0 0 24px;
+  font-size: 28px;
+  letter-spacing: 1px;
+}
+
+label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+input[type="text"], input[type="password"] {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+input[type="text"]:focus, input[type="password"]:focus {
+  border-color: var(--accent);
+}
+
+button {
+  width: 100%;
+  padding: 12px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+button:hover {
+  background: #a5301f;
+}
+
+#message {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 14px;
+  min-height: 18px;
+}
+
+#message.error { color: var(--accent); }
+#message.success { color: #2e7d32; }

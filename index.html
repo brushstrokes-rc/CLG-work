@@ -7,7 +7,21 @@
     <link rel="stylesheet" href="brushstroke.css">
 </head>
 <body>
-    <h1>hello</h1>
+    <div class="login-card">
+    <div class="brand">Brushstrokes</div>
+    <span class="brush-underline"></span>
+    <h1>Login</h1>
+    <form id="loginForm">
+      <label for="username">Username</label>
+      <input type="text" id="username" autocomplete="username" required>
+ 
+      <label for="password">Password</label>
+      <input type="password" id="password" autocomplete="current-password" required>
+ 
+      <button type="submit">Login</button>
+      <div id="message"></div>
+    </form>
+  </div>
     
 <script src="brushstroke.js"></script>
 </body>

@@ -28,6 +28,12 @@
   <div class="page hidden" id="dashboardSection">
     <div class="brand">Brushstrokes</div>
  
+    <!-- Date picker: shows dd/mm/yy, click opens native calendar -->
+    <div class="date-row">
+      <button id="dateBtn" type="button" class="date-box">01/01/26</button>
+      <input type="date" id="dateInput" class="date-input-hidden">
+    </div>
+ 
     <button id="attendanceBtn" class="attendance-box">Attendance</button>
  
     <div id="attendanceSection" class="attendance-section hidden">
@@ -45,7 +51,7 @@
       <button id="saveBtn" class="save-btn">Save Data</button>
  
       <div id="saveDataBox" class="save-data-box hidden">
-        <h3>Save Data</h3>
+        <h3 id="saveDataTitle">Save Data</h3>
         <p><strong>Present:</strong> <span id="presentList">-</span></p>
         <p><strong>Absent:</strong> <span id="absentList">-</span></p>
       </div>

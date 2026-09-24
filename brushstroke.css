@@ -139,6 +139,45 @@ html, body {
   box-shadow: 0 8px 24px rgba(0,0,0,0.08);
 }
 
+.date-row {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.date-box {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  background: #fff;
+  color: var(--blue);
+  border: 2px solid var(--blue);
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.date-box:hover {
+  background: #eaf2fd;
+}
+
+.date-box::before {
+  content: "\1F4C5  ";
+}
+
+.date-input-hidden {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  border: none;
+  pointer-events: none;
+}
+
 .attendance-box {
   display: block;
   width: 100%;

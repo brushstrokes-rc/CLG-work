@@ -20,7 +20,38 @@
  
       <button type="submit">Login</button>
       <div id="message"></div>
+
     </form>
+  </div>
+  <div class="page">
+    <div class="brand">Brushstrokes</div>
+ 
+    <button id="attendanceBtn" class="attendance-box">Attendance</button>
+ 
+    <div id="attendanceSection" class="attendance-section hidden">
+ 
+      <table id="attendanceTable">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Present</th>
+            <th>Absent</th>
+          </tr>
+        </thead>
+        <tbody id="attendanceBody">
+          <!-- rows added by JS -->
+        </tbody>
+      </table>
+ 
+      <button id="saveBtn" class="save-btn">Save Data</button>
+ 
+      <div id="saveDataBox" class="save-data-box hidden">
+        <h3>Save Data</h3>
+        <p><strong>Present:</strong> <span id="presentList">-</span></p>
+        <p><strong>Absent:</strong> <span id="absentList">-</span></p>
+      </div>
+ 
+    </div>
   </div>
     
 <script src="brushstroke.js"></script>

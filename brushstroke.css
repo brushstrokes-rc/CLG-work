@@ -3,34 +3,33 @@
   --card-bg: #ffffff;
   --text: #2b2b2b;
   --accent: #c0392b;
+  --blue: #1d6fd8;
   --border: #ddd6c9;
+  --green: #2e7d32;
+  --red: #c0392b;
 }
 
 * { box-sizing: border-box; }
 
 html, body {
-  height: 100%;
+  min-height: 100%;
   margin: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: var(--bg);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding: 40px 16px;
 }
 
-.login-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 40px 36px;
-  width: 100%;
-  max-width: 360px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+.hidden {
+  display: none;
 }
 
+/* ---------- Shared brand heading ---------- */
 .brand {
   text-align: center;
-  font-size: 40px;
+  font-size: 38px;
   font-weight: 800;
   margin: 0 0 8px;
   letter-spacing: 1px;
@@ -58,7 +57,18 @@ html, body {
   mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 20'><path d='M2 12 C 40 2, 70 18, 100 8 S 160 2, 198 12' stroke='black' stroke-width='10' fill='none' stroke-linecap='round'/></svg>") center/contain no-repeat;
 }
 
-h1 {
+/* ---------- Login card ---------- */
+.login-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+
+.login-card h1 {
   text-align: center;
   color: var(--accent);
   margin: 0 0 24px;
@@ -66,7 +76,7 @@ h1 {
   letter-spacing: 1px;
 }
 
-label {
+.login-card label {
   display: block;
   font-size: 13px;
   margin-bottom: 6px;
@@ -74,7 +84,8 @@ label {
   font-weight: 600;
 }
 
-input[type="text"], input[type="password"] {
+.login-card input[type="text"],
+.login-card input[type="password"] {
   width: 100%;
   padding: 10px 12px;
   margin-bottom: 18px;
@@ -85,11 +96,12 @@ input[type="text"], input[type="password"] {
   transition: border-color 0.2s;
 }
 
-input[type="text"]:focus, input[type="password"]:focus {
+.login-card input[type="text"]:focus,
+.login-card input[type="password"]:focus {
   border-color: var(--accent);
 }
 
-button {
+.login-card button {
   width: 100%;
   padding: 12px;
   background: var(--accent);
@@ -102,7 +114,7 @@ button {
   transition: background 0.2s;
 }
 
-button:hover {
+.login-card button:hover {
   background: #a5301f;
 }
 
@@ -115,30 +127,8 @@ button:hover {
 
 #message.error { color: var(--accent); }
 #message.success { color: #2e7d32; }
-:root {
-  --bg: #f4f1ec;
-  --card-bg: #ffffff;
-  --text: #2b2b2b;
-  --accent: #c0392b;
-  --blue: #1d6fd8;
-  --border: #ddd6c9;
-  --green: #2e7d32;
-  --red: #c0392b;
-}
- 
-* { box-sizing: border-box; }
- 
-html, body {
-  min-height: 100%;
-  margin: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: var(--bg);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 40px 16px;
-}
- 
+
+/* ---------- Dashboard / Attendance ---------- */
 .page {
   width: 100%;
   max-width: 480px;
@@ -148,27 +138,7 @@ html, body {
   padding: 32px 28px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.08);
 }
- 
-.brand {
-  text-align: center;
-  font-size: 38px;
-  font-weight: 800;
-  margin: 0 0 24px;
-  letter-spacing: 1px;
-  background: linear-gradient(90deg, #ff512f, #f09819, #ff9d00, #43cea2, #185a9d, #8e2de2, #ff512f);
-  background-size: 300% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-  animation: brushShift 6s linear infinite;
-}
- 
-@keyframes brushShift {
-  0% { background-position: 0% center; }
-  100% { background-position: 300% center; }
-}
- 
+
 .attendance-box {
   display: block;
   width: 100%;
@@ -182,61 +152,57 @@ html, body {
   cursor: pointer;
   transition: background 0.2s;
 }
- 
+
 .attendance-box:hover {
   background: #1558ab;
 }
- 
-.hidden {
-  display: none;
-}
- 
+
 .attendance-section {
   margin-top: 24px;
 }
- 
+
 #attendanceTable {
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 20px;
 }
- 
+
 #attendanceTable th, #attendanceTable td {
   border: 1px solid var(--border);
   padding: 10px;
   text-align: center;
   font-size: 14px;
 }
- 
+
 #attendanceTable th {
   background: #f0ede6;
   color: var(--text);
 }
- 
+
 #attendanceTable td.student-name {
   text-align: left;
   font-weight: 600;
 }
- 
+
 .status-cell {
   cursor: pointer;
   height: 32px;
   border-radius: 4px;
   transition: background 0.2s;
 }
- 
+
 .status-cell:hover {
   background: #eee;
 }
- 
+
 .status-cell.present-active {
   background: var(--green) !important;
 }
- 
+
 .status-cell.absent-active {
   background: var(--red) !important;
 }
- 
+
 .save-btn {
   display: block;
   width: 100%;
@@ -250,11 +216,11 @@ html, body {
   cursor: pointer;
   transition: background 0.2s;
 }
- 
+
 .save-btn:hover {
   background: #a5301f;
 }
- 
+
 .save-data-box {
   margin-top: 20px;
   padding: 16px;
@@ -262,12 +228,12 @@ html, body {
   border-radius: 8px;
   background: #f9f8f5;
 }
- 
+
 .save-data-box h3 {
   margin: 0 0 10px;
   color: var(--text);
 }
- 
+
 .save-data-box p {
   margin: 6px 0;
   font-size: 14px;

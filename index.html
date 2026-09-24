@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="brushstroke.css">
 </head>
 <body>
-    <div class="login-card">
+    <!-- LOGIN SECTION (shown first) -->
+  <div class="login-card" id="loginSection">
     <div class="brand">Brushstrokes</div>
     <span class="brush-underline"></span>
     <h1>Login</h1>
@@ -20,16 +21,16 @@
  
       <button type="submit">Login</button>
       <div id="message"></div>
-
     </form>
   </div>
-  <div class="page">
+ 
+  <!-- DASHBOARD / ATTENDANCE SECTION (hidden until login succeeds) -->
+  <div class="page hidden" id="dashboardSection">
     <div class="brand">Brushstrokes</div>
  
     <button id="attendanceBtn" class="attendance-box">Attendance</button>
  
     <div id="attendanceSection" class="attendance-section hidden">
- 
       <table id="attendanceTable">
         <thead>
           <tr>
@@ -38,9 +39,7 @@
             <th>Absent</th>
           </tr>
         </thead>
-        <tbody id="attendanceBody">
-          <!-- rows added by JS -->
-        </tbody>
+        <tbody id="attendanceBody"></tbody>
       </table>
  
       <button id="saveBtn" class="save-btn">Save Data</button>
@@ -50,7 +49,6 @@
         <p><strong>Present:</strong> <span id="presentList">-</span></p>
         <p><strong>Absent:</strong> <span id="absentList">-</span></p>
       </div>
- 
     </div>
   </div>
     

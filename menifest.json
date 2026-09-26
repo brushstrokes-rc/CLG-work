@@ -1,17 +1,16 @@
 {
-  "name": "Brushstrokes",
-  "short_name": "Brushstrokes",
-  "start_url": "./",
+  "name": "brushstrokes",
+  "short_name": "BS",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#123456",
+  "theme_color": "#ffffff",
   "icons": [
     {
-      "src": "brushstrokes-icon.png",
+      "src": "icon.png",
       "sizes": "512x512",
       "type": "image/png"
     }
   ]
 }
-   
 

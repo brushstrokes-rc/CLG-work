@@ -4,8 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
-    <link rel="stylesheet" href="brushstroke.css">
-    <link rel="manifest" href="manifest.json">
+    <!-- Normal browser tab icon -->
+<link rel="icon" type="image/png" href="icon.png">
+
+<!-- iPhone/iOS home screen icon -->
+<link rel="apple-touch-icon" href="icon.png">
+
+<!-- Android/Chrome home screen icon (PWA) -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffffff">
 <meta name="theme-color" content="#123456">
 </head>
 <body>
@@ -60,11 +67,6 @@
     </div>
   </div>
     
-<script src="brushstroke.js"></script>
-<script>
-if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js");
-}
 </script>
 </body>
 </html>

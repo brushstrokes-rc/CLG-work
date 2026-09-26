@@ -278,3 +278,71 @@ html, body {
   font-size: 14px;
   color: var(--text);
 }
+.signup-heading {
+  text-align: center;
+  color: var(--blue);
+  font-family: 'Brush Script MT', 'Segoe Script', 'Comic Sans MS', cursive;
+  font-size: 30px;
+  margin: 0 0 22px;
+}
+
+.create-account-btn {
+  width: 100%;
+  padding: 12px;
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.create-account-btn:hover {
+  background: #1558ab;
+}
+
+.course-dropdown-wrap {
+  position: relative;
+  margin-bottom: 18px;
+}
+
+.course-dropdown-wrap input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+}
+
+.course-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  z-index: 10;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+  margin-top: 4px;
+}
+
+.course-list div {
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid #f0ede6;
+}
+
+.course-list div:last-child {
+  border-bottom: none;
+}
+
+.course-list div:hover {
+  background: #eaf2fd;
+}

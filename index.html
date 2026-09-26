@@ -15,9 +15,38 @@
 <meta name="theme-color" content="#ffffff">
 <link rel="stylesheet" href="brushstroke.css">
 </head>
+
 <body>
+  <!-- CREATE ACCOUNT SECTION (shown first, only if no account exists on this device) -->
+<div class="login-card" id="signupSection">
+  <div class="brand">Brushstrokes</div>
+  <span class="brush-underline"></span>
+  <h1 class="signup-heading">Create New Account</h1>
+  <form id="signupForm">
+    <label for="suUsername">Username</label>
+    <input type="text" id="suUsername" required>
+
+    <label for="suPassword">Create a password</label>
+    <input type="password" id="suPassword" required>
+
+    <label for="suDob">Date of Birth</label>
+    <input type="date" id="suDob" required>
+
+    <label for="suRoll">Roll No.</label>
+    <input type="text" id="suRoll" required>
+
+    <label for="suCourseSearch">Course</label>
+    <div class="course-dropdown-wrap">
+      <input type="text" id="suCourseSearch" placeholder="Search course..." autocomplete="off" required>
+      <div id="courseList" class="course-list hidden"></div>
+    </div>
+
+    <button type="submit" class="create-account-btn">Create Account</button>
+    <div id="signupMessage"></div>
+  </form>
+</div>
     <!-- LOGIN SECTION (shown first) -->
-  <div class="login-card" id="loginSection">
+  <div class="login-card hidden" id="loginSection">
     <div class="brand">Brushstrokes</div>
     <span class="brush-underline"></span>
     <h1>Login</h1>

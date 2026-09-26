@@ -1,5 +1,49 @@
-const VALID_USERNAME = "brushstrokes";
-const VALID_PASSWORD = "art4ever";
+// ---------- Account storage (one account per device) ----------
+const ACCOUNT_KEY = "brushstrokes_account";
+
+function getAccount() {
+  try {
+    const raw = localStorage.getItem(ACCOUNT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function saveAccount(account) {
+  try {
+    localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
+  } catch (err) {
+    // storage unavailable
+  }
+}
+
+const courses = [
+  "B.A. (Hons.) Applied Psychology",
+  "B.A. (Hons.) Economics",
+  "B.A. (Hons.) English",
+  "B.A. (Hons.) Hindi",
+  "B.A. (Hons.) Philosophy",
+  "B.A. (Hons.) Political Science",
+  "B.A. Programme (Commerce + Economics)",
+  "B.A. Programme (Commerce + Mathematics)",
+  "B.A. Programme (Economics + Psychology)",
+  "B.A. Programme (Hindi + History)",
+  "B.A. Programme (Hindi + Political Science)",
+  "B.A. Programme (History + Philosophy)",
+  "B.A. Programme (History + Political Science)",
+  "B.A. Programme (Philosophy + Political Science)",
+  "B.A. Programme (Political Science + Psychology)",
+  "B.Com.",
+  "B.Com. (Hons.)",
+  "B.Sc. (Hons.) Computer Science",
+  "B.Sc. (Hons.) Environmental Sciences",
+  "B.Sc. (Hons.) Mathematics",
+  "B.Sc. (Hons.) Statistics",
+  "B.Voc. Banking, Financial Services and Insurance",
+  "B.Voc. Software Development",
+  "Bachelor of Management Studies (BMS)"
+];
 
 // Student list — edit this array to add/remove students
 const students = [
@@ -128,12 +172,12 @@ loginForm.addEventListener("submit", function (e) {
 
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
+  const account = getAccount();
 
-  if (username === VALID_USERNAME && password === VALID_PASSWORD) {
+  if (account && username === account.username && password === account.password) {
     message.textContent = "Login successful!";
     message.className = "success";
 
-    // Hide login, reveal the attendance dashboard
     loginSection.classList.add("hidden");
     dashboardSection.classList.remove("hidden");
   } else {
@@ -276,3 +320,87 @@ saveBtn.addEventListener("click", function () {
 
   saveDataBox.classList.remove("hidden");
 });
+// ---------- Signup / Course dropdown / decide first screen ----------
+const signupSection = document.getElementById("signupSection");
+const signupForm = document.getElementById("signupForm");
+const signupMessage = document.getElementById("signupMessage");
+const suCourseSearch = document.getElementById("suCourseSearch");
+const courseList = document.getElementById("courseList");
+
+let selectedCourse = "";
+
+// Show matching courses as user types
+suCourseSearch.addEventListener("input", function () {
+  const query = suCourseSearch.value.trim().toLowerCase();
+  selectedCourse = "";
+  courseList.innerHTML = "";
+
+  if (!query) {
+    courseList.classList.add("hidden");
+    return;
+  }
+
+  const matches = courses.filter((c) => c.toLowerCase().includes(query));
+
+  if (matches.length === 0) {
+    courseList.classList.add("hidden");
+    return;
+  }
+
+  matches.forEach((course) => {
+    const item = document.createElement("div");
+    item.textContent = course;
+    item.addEventListener("click", function () {
+      suCourseSearch.value = course;
+      selectedCourse = course;
+      courseList.classList.add("hidden");
+    });
+    courseList.appendChild(item);
+  });
+
+  courseList.classList.remove("hidden");
+});
+
+// Hide dropdown if clicked outside
+document.addEventListener("click", function (e) {
+  if (!e.target.closest(".course-dropdown-wrap")) {
+    courseList.classList.add("hidden");
+  }
+});
+
+// Handle account creation
+signupForm.addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  const username = document.getElementById("suUsername").value.trim();
+  const password = document.getElementById("suPassword").value;
+  const dob = document.getElementById("suDob").value;
+  const rollNo = document.getElementById("suRoll").value.trim();
+
+  if (!selectedCourse) {
+    signupMessage.textContent = "Please select a course from the list.";
+    signupMessage.className = "error";
+    return;
+  }
+
+  const account = { username, password, dob, rollNo, course: selectedCourse };
+  saveAccount(account);
+
+  signupMessage.textContent = "Account created!";
+  signupMessage.className = "success";
+
+  signupSection.classList.add("hidden");
+  loginSection.classList.remove("hidden");
+});
+
+// Decide which screen to show first when page loads
+(function initFirstScreen() {
+  const account = getAccount();
+  if (account) {
+    signupSection.classList.add("hidden");
+    loginSection.classList.remove("hidden");
+  } else {
+    signupSection.classList.remove("hidden");
+    loginSection.classList.add("hidden");
+  }
+})();

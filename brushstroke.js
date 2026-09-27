@@ -404,3 +404,14 @@ signupForm.addEventListener("submit", function (e) {
     loginSection.classList.add("hidden");
   }
 })();
+// ---------- Splash screen ----------
+window.addEventListener("load", function () {
+  setTimeout(function () {
+    const splash = document.getElementById("splashScreen");
+    if (!splash) return;
+    splash.classList.add("fade-out");
+    setTimeout(function () {
+      splash.style.display = "none";
+    }, 500);
+  }, 2000);
+});

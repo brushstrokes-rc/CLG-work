@@ -346,3 +346,55 @@ html, body {
 .course-list div:hover {
   background: #eaf2fd;
 }
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: opacity 0.5s ease;
+}
+
+.splash-screen.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.splash-text {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  background: linear-gradient(90deg, #ff512f, #f09819, #ff9d00, #43cea2, #185a9d, #8e2de2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  display: inline-block;
+  clip-path: inset(0 100% 0 0);
+  animation: paintReveal 1.6s steps(60) forwards;
+}
+
+.splash-brush-icon {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  font-size: 30px;
+  transform: translate(-50%, -55%) rotate(-25deg);
+  animation: moveBrush 1.6s linear forwards;
+}
+
+@keyframes paintReveal {
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes moveBrush {
+  to { left: 100%; }
+}

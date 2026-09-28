@@ -374,7 +374,6 @@ signupForm.addEventListener("submit", function (e) {
 
   const username = document.getElementById("suUsername").value.trim();
   const password = document.getElementById("suPassword").value;
-  const dob = document.getElementById("suDob").value;
   const rollNo = document.getElementById("suRoll").value.trim();
 
   if (!selectedCourse) {
@@ -383,7 +382,7 @@ signupForm.addEventListener("submit", function (e) {
     return;
   }
 
-  const account = { username, password, dob, rollNo, course: selectedCourse };
+    const account = { username, password, rollNo, course: selectedCourse };
   saveAccount(account);
 
   signupMessage.textContent = "Account created!";

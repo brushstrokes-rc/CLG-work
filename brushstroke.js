@@ -3,6 +3,15 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, on
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  
+const firebaseConfig = {
+  apiKey: "AIzaSyDXdAA-gK43ZC6BlspWYrB9_Yk3nO0tLnY",
+  authDomain: "brushstrokes-cc86c.firebaseapp.com",
+  projectId: "brushstrokes-cc86c",
+  storageBucket: "brushstrokes-cc86c.firebasestorage.app",
+  messagingSenderId: "684392264786",
+  appId: "1:684392264786:web:155f9a259161c036995b8b"
+};  
 
 const app = initializeApp({ /* Step 1 wala firebaseConfig */ });
 const auth = getAuth(app);

@@ -3,7 +3,7 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, on
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  
+
 const firebaseConfig = {
   apiKey: "AIzaSyDXdAA-gK43ZC6BlspWYrB9_Yk3nO0tLnY",
   authDomain: "brushstrokes-cc86c.firebaseapp.com",

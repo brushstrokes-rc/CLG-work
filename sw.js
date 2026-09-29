@@ -1,4 +1,4 @@
-const CACHE_NAME = "brushstrokes-cache-v9";
+const CACHE_NAME = "brushstrokes-cache-v10";
 
 // Saari files jo offline chahiye
 const urlsToCache = [
@@ -36,16 +36,17 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch: pehle cache se try karo, na mile to internet se lao
+// Fetch: pehle internet se try karo, offline ho to cache se lao
 self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).catch(() => {
-        // agar dono fail ho (offline + cache mein nahi) to kuch nahi hoga
-      });
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        const copy = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return networkResponse;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

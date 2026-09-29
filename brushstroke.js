@@ -1,22 +1,15 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const app = initializeApp({ /* Step 1 wala firebaseConfig */ });
+const auth = getAuth(app);
+const db = getFirestore(app);
+const toEmail = u => `${u.trim().toLowerCase()}@brushstrokes.app`;
 // ---------- Account storage (one account per device) ----------
-const ACCOUNT_KEY = "brushstrokes_account";
 
-function getAccount() {
-  try {
-    const raw = localStorage.getItem(ACCOUNT_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (err) {
-    return null;
-  }
-}
-
-function saveAccount(account) {
-  try {
-    localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
-  } catch (err) {
-    // storage unavailable
-  }
-}
 
 const courses = [
   "B.A. (Hons.) Applied Psychology",
@@ -108,27 +101,17 @@ const students = [
 
 // Attendance data stored per date: { "2026-09-24": { "Rupam Nama": "present", ... }, ... }
 // Persisted in the browser's localStorage so it survives reloads / closing the tab
-const STORAGE_KEY = "brushstrokes_attendance_data";
+let attendanceData = {};
+let unsubscribeAttendance = null;
 
-function loadAttendanceData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (err) {
-    return {};
-  }
+function startAttendanceListener() {
+  if (unsubscribeAttendance) return;
+  unsubscribeAttendance = onSnapshot(collection(db, "attendance"), function (snap) {
+    attendanceData = {};
+    snap.forEach(function (d) { attendanceData[d.id] = d.data(); });
+    refreshTableForDate();
+  });
 }
-
-function saveAttendanceData() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(attendanceData));
-  } catch (err) {
-    // storage unavailable/full — attendance still works for this session
-  }
-}
-
-const attendanceData = loadAttendanceData();
-
 // Currently selected date (defaults to today)
 let selectedDate = new Date();
 
@@ -167,20 +150,18 @@ function toDisplay(date) {
 }
 
 // ---------- Login: only the login card shows on page load ----------
-loginForm.addEventListener("submit", function (e) {
+loginForm.addEventListener("submit", async function (e) {
   e.preventDefault();
-
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
-  const account = getAccount();
-
-  if (account && username === account.username && password === account.password) {
+  try {
+    await signInWithEmailAndPassword(auth, toEmail(username), password);
     message.textContent = "Login successful!";
     message.className = "success";
-
     loginSection.classList.add("hidden");
     dashboardSection.classList.remove("hidden");
-  } else {
+    startAttendanceListener();
+  } catch (err) {
     message.textContent = "Invalid username or password.";
     message.className = "error";
   }
@@ -249,24 +230,23 @@ buildTable();
 refreshTableForDate();
 
 // Click on a "Present" / "Absent" cell -> save it under the selected date
-attendanceBody.addEventListener("click", function (e) {
+attendanceBody.addEventListener("click", async function (e) {
   const target = e.target;
   const dateStr = toISO(selectedDate);
+  let name = null, status = null;
+
+  if (target.classList.contains("present-cell")) { name = target.dataset.student; status = "present"; }
+  else if (target.classList.contains("absent-cell")) { name = target.dataset.student; status = "absent"; }
+  if (!name) return;
 
   if (!attendanceData[dateStr]) attendanceData[dateStr] = {};
+  attendanceData[dateStr][name] = status;
+  markRow(name, dateStr);
 
-  if (target.classList.contains("present-cell")) {
-    const name = target.dataset.student;
-    attendanceData[dateStr][name] = "present";
-    markRow(name, dateStr);
-    saveAttendanceData();
-  }
-
-  if (target.classList.contains("absent-cell")) {
-    const name = target.dataset.student;
-    attendanceData[dateStr][name] = "absent";
-    markRow(name, dateStr);
-    saveAttendanceData();
+  try {
+    await setDoc(doc(db, "attendance", dateStr), { [name]: status }, { merge: true });
+  } catch (err) {
+    console.error("Save failed:", err);
   }
 });
 
@@ -369,7 +349,7 @@ document.addEventListener("click", function (e) {
 });
 
 // Handle account creation
-signupForm.addEventListener("submit", function (e) {
+signupForm.addEventListener("submit", async function (e) {
   e.preventDefault();
 
   const username = document.getElementById("suUsername").value.trim();
@@ -382,8 +362,13 @@ signupForm.addEventListener("submit", function (e) {
     return;
   }
 
-    const account = { username, password, rollNo, course: selectedCourse };
-  saveAccount(account);
+try {
+  await createUserWithEmailAndPassword(auth, toEmail(username), password);
+} catch (err) {
+  signupMessage.textContent = err.message;
+  signupMessage.className = "error";
+  return;
+}
 
   signupMessage.textContent = "Account created!";
   signupMessage.className = "success";
@@ -393,16 +378,16 @@ signupForm.addEventListener("submit", function (e) {
 });
 
 // Decide which screen to show first when page loads
-(function initFirstScreen() {
-  const account = getAccount();
-  if (account) {
+onAuthStateChanged(auth, function (user) {
+  if (user) {
     signupSection.classList.add("hidden");
     loginSection.classList.remove("hidden");
+    startAttendanceListener();
   } else {
     signupSection.classList.remove("hidden");
     loginSection.classList.add("hidden");
   }
-})();
+});
 // ---------- Splash screen ----------
 window.addEventListener("load", function () {
   setTimeout(function () {

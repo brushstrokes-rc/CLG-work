@@ -399,35 +399,41 @@ html, body {
   to { left: 100%; }
 }
 .pw-wrap {
-  position: relative;
-  display: block;
-  width: 100%;
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  margin-bottom: 14px;          /* jitna gap pehle input ke neeche tha, utna rakho */
 }
 .pw-wrap input {
-  width: 100%;
-  box-sizing: border-box;
-  padding-right: 48px;      /* icon ke liye jagah */
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding-right: 48px !important;
+  margin: 0 !important;         /* taaki icon bilkul beech me aaye */
 }
-.pw-eye {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  margin: 0;
-  background: none;
-  border: none;
-  outline: none;
+.pw-wrap .pw-eye {
+  all: unset;                    /* aapke global button style hata do */
+  position: absolute !important;
+  right: 12px !important;
+  top: 50% !important;
+  left: auto !important;
+  bottom: auto !important;
+  transform: translateY(-50%) !important;
+  width: 28px !important;
+  height: 28px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #111 !important;
   cursor: pointer;
-  display: flex;
+  display: flex !important;
   align-items: center;
   justify-content: center;
-  color: #111;
+  z-index: 2;
   -webkit-tap-highlight-color: transparent;
 }
-.pw-eye svg {
+.pw-wrap .pw-eye svg {
   width: 24px;
   height: 24px;
   pointer-events: none;

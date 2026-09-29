@@ -405,21 +405,40 @@ html, body {
 }
 .pw-wrap input {
   width: 100%;
-  padding-right: 44px;   /* icon ke liye jagah */
   box-sizing: border-box;
+  padding-right: 48px;      /* icon ke liye jagah */
 }
 .pw-eye {
   position: absolute;
-  right: 10px;
+  right: 14px;
   top: 50%;
   transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
   background: none;
   border: none;
-  padding: 4px;
+  outline: none;
   cursor: pointer;
   display: flex;
   align-items: center;
-  color: #666;
+  justify-content: center;
+  color: #111;
+  -webkit-tap-highlight-color: transparent;
 }
-.pw-eye:hover { color: #1a73e8; }
-.pw-eye svg { width: 22px; height: 22px; }
+.pw-eye svg {
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+}
+
+/* browser ka apna eye icon band karo */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear { display: none; }
+input[type="password"]::-webkit-credentials-auto-fill-button,
+input[type="password"]::-webkit-contacts-auto-fill-button {
+  visibility: hidden;
+  display: none !important;
+  pointer-events: none;
+}

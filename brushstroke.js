@@ -415,19 +415,26 @@ window.addEventListener("load", function () {
   }, 2000);
 });
 (function () {
+  const attrs = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"';
+
+  // khuli eye (password dikh raha hai)
   const EYE_OPEN =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    '<svg ' + attrs + '><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+
+  // slash wali eye (password dots me hai)
   const EYE_OFF =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+    '<svg ' + attrs + '><path d="M2 12s3.6-7 10-7c2 0 3.7.6 5.2 1.5M22 12s-3.6 7-10 7c-2 0-3.7-.6-5.2-1.5"/><circle cx="12" cy="12" r="3"/><line x1="3" y1="3" x2="21" y2="21"/></svg>';
 
   document.querySelectorAll('input[type="password"]').forEach(function (input) {
+    if (input.parentNode.classList.contains('pw-wrap')) return;  // dobara na lage
+
     const wrap = document.createElement('div');
     wrap.className = 'pw-wrap';
     input.parentNode.insertBefore(wrap, input);
     wrap.appendChild(input);
 
     const btn = document.createElement('button');
-    btn.type = 'button';              // form submit na ho
+    btn.type = 'button';
     btn.className = 'pw-eye';
     btn.setAttribute('aria-label', 'Show password');
     btn.innerHTML = EYE_OFF;
@@ -435,7 +442,7 @@ window.addEventListener("load", function () {
 
     btn.addEventListener('click', function () {
       const show = input.type === 'password';
-      input.type = show ? 'text' : 'password';   // dikhao / dots
+      input.type = show ? 'text' : 'password';
       btn.innerHTML = show ? EYE_OPEN : EYE_OFF;
       btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
     });

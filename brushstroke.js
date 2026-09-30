@@ -224,9 +224,9 @@ function buildTable() {
     presentCell.className = "status-cell present-cell";
     presentCell.dataset.student = name;
 
-    const absentCell = document.createElement("td");
-    absentCell.className = "status-cell half-cell";
-    absentCell.dataset.student = name;
+    const halfCell = document.createElement("td");
+    halfCell.className = "status-cell half-cell";
+    halfCell.dataset.student = name;
 
     row.appendChild(nameCell);
     row.appendChild(presentCell);

@@ -69,6 +69,17 @@
   <!-- DASHBOARD / ATTENDANCE SECTION (hidden until login succeeds) -->
   <div class="page hidden" id="dashboardSection">
     <div class="brand">Brushstrokes</div>
+    <!-- Search Bar HTML - attendance section mein add karo -->
+<div class="search-container">
+  <input 
+    type="text" 
+    id="studentSearch" 
+    placeholder="Search student by name or roll no..." 
+    autocomplete="off"
+    oninput="handleSearch(this.value)"
+  />
+  <div class="search-suggestions" id="searchSuggestions"></div>
+</div>
  
     <!-- Date picker: shows dd/mm/yy, click opens native calendar -->
     <div class="date-row">

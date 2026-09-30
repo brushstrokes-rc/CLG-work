@@ -441,3 +441,33 @@ window.addEventListener("load", function () {
     });
   });
 })();
+// brushstroke.js mein add karo
+
+import { db } from './firebase-config.js'; // apna firebase config path
+import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.x.x/firebase-firestore.js";
+
+let studentList = []; // global array
+
+// App load hote hi students fetch karo
+async function loadStudentsFromFirebase() {
+  try {
+    const querySnapshot = await getDocs(collection(db, "students")); // "students" = apna collection name
+    studentList = [];
+    querySnapshot.forEach(doc => {
+      const data = doc.data();
+      studentList.push({
+        id: doc.id,
+        name: data.name || data.username, // jo field hai Firebase mein
+        rollNo: data.rollNo || data.roll_no || ''
+      });
+    });
+    console.log(`${studentList.length} students loaded`);
+  } catch (error) {
+    console.error("Firebase fetch error:", error);
+  }
+}
+
+// Page load pe call karo
+window.addEventListener('DOMContentLoaded', () => {
+  loadStudentsFromFirebase();
+});

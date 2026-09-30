@@ -69,6 +69,12 @@
   <!-- DASHBOARD / ATTENDANCE SECTION (hidden until login succeeds) -->
   <div class="page hidden" id="dashboardSection">
     <div class="brand">Brushstrokes</div>
+      <!-- Date picker: shows dd/mm/yy, click opens native calendar -->
+    <div class="date-row">
+      <button id="dateBtn" type="button" class="date-box">01/01/26</button>
+      <input type="date" id="dateInput" class="date-input-hidden">
+    </div> 
+
     <div class="search-wrapper">
   <input 
     type="text" 
@@ -78,21 +84,20 @@
   />
   <div id="searchSuggestions" class="search-suggestions"></div>
 </div>
-    <!-- Date picker: shows dd/mm/yy, click opens native calendar -->
-    <div class="date-row">
-      <button id="dateBtn" type="button" class="date-box">01/01/26</button>
-      <input type="date" id="dateInput" class="date-input-hidden">
-    </div>
  
     <button id="attendanceBtn" class="attendance-box">Attendance</button>
  
     <div id="attendanceSection" class="attendance-section hidden">
+      <div class="action-row">
+  <button id="attendanceBtn" class="attendance-box">Attendance</button>
+  <button id="clearAllBtn" type="button" class="clear-all-btn">Clear All</button>
+</div>
       <table id="attendanceTable">
         <thead>
           <tr>
             <th>Student</th>
             <th>Present</th>
-            <th>Absent</th>
+            <th>half-present</th>
           </tr>
         </thead>
         <tbody id="attendanceBody"></tbody>
@@ -103,7 +108,7 @@
       <div id="saveDataBox" class="save-data-box hidden">
         <h3 id="saveDataTitle">Save Data</h3>
         <p><strong>Present:</strong> <span id="presentList">-</span></p>
-        <p><strong>Absent:</strong> <span id="absentList">-</span></p>
+        <p><strong>Half Present:</strong> <span id="halfList">-</span></p>
       </div>
     </div>
   </div>

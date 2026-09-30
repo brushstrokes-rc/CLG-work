@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs, onSnapshot }
+import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs, onSnapshot, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -139,7 +139,8 @@ const saveBtn = document.getElementById("saveBtn");
 const saveDataBox = document.getElementById("saveDataBox");
 const saveDataTitle = document.getElementById("saveDataTitle");
 const presentListEl = document.getElementById("presentList");
-const absentListEl = document.getElementById("absentList");
+const halfListEl = document.getElementById("halfList");
+const clearAllBtn = document.getElementById("clearAllBtn");
 
 // ---------- Date helpers ----------
 function pad(n) {
@@ -224,12 +225,12 @@ function buildTable() {
     presentCell.dataset.student = name;
 
     const absentCell = document.createElement("td");
-    absentCell.className = "status-cell absent-cell";
+    absentCell.className = "status-cell half-cell";
     absentCell.dataset.student = name;
 
     row.appendChild(nameCell);
     row.appendChild(presentCell);
-    row.appendChild(absentCell);
+    row.appendChild(halfCell);
     attendanceBody.appendChild(row);
   });
 }
@@ -243,8 +244,8 @@ attendanceBody.addEventListener("click", async function (e) {
   const dateStr = toISO(selectedDate);
   let name = null, status = null;
 
-  if (target.classList.contains("present-cell")) { name = target.dataset.student; status = "present"; }
-  else if (target.classList.contains("absent-cell")) { name = target.dataset.student; status = "absent"; }
+if (target.classList.contains("present-cell")) { name = target.dataset.student; status = "present"; }
+else if (target.classList.contains("half-cell")) { name = target.dataset.student; status = "half"; }
   if (!name) return;
 
   if (!attendanceData[dateStr]) attendanceData[dateStr] = {};
@@ -263,20 +264,16 @@ function markRow(name, dateStr) {
   const dayData = attendanceData[dateStr] || {};
   const status = dayData[name];
 
-  const presentCell = attendanceBody.querySelector(
-    '.present-cell[data-student="' + name + '"]'
-  );
-  const absentCell = attendanceBody.querySelector(
-    '.absent-cell[data-student="' + name + '"]'
-  );
+  const presentCell = attendanceBody.querySelector('.present-cell[data-student="' + name + '"]');
+  const halfCell = attendanceBody.querySelector('.half-cell[data-student="' + name + '"]');
 
   presentCell.classList.remove("present-active");
-  absentCell.classList.remove("absent-active");
+  halfCell.classList.remove("half-active");
 
   if (status === "present") {
     presentCell.classList.add("present-active");
-  } else if (status === "absent") {
-    absentCell.classList.add("absent-active");
+  } else if (status === "half") {
+    halfCell.classList.add("half-active");
   }
 }
 
@@ -295,18 +292,34 @@ saveBtn.addEventListener("click", function () {
   const dayData = attendanceData[dateStr] || {};
 
   const present = [];
-  const absent = [];
+  const half = [];
 
   students.forEach(function (name) {
     if (dayData[name] === "present") present.push(name);
-    else if (dayData[name] === "absent") absent.push(name);
+    else if (dayData[name] === "half") half.push(name);
   });
 
   saveDataTitle.textContent = "Save Data (" + toDisplay(selectedDate) + ")";
   presentListEl.textContent = present.length ? present.join(", ") : "-";
-  absentListEl.textContent = absent.length ? absent.join(", ") : "-";
+  halfListEl.textContent = half.length ? half.join(", ") : "-";
 
   saveDataBox.classList.remove("hidden");
+});
+// Clear All -> selected date ki poori attendance delete
+clearAllBtn.addEventListener("click", async function () {
+  const dateStr = toISO(selectedDate);
+
+  if (!confirm("Kya aap " + toDisplay(selectedDate) + " ki poori attendance clear karna chahte ho?")) return;
+
+  try {
+    await deleteDoc(doc(db, "attendance", dateStr));
+    delete attendanceData[dateStr];
+    refreshTableForDate();
+    saveDataBox.classList.add("hidden");
+  } catch (err) {
+    console.error("Clear failed:", err);
+    alert("Clear nahi ho paya, dobara try karo.");
+  }
 });
 // ---------- Signup / Course dropdown / decide first screen ----------
 const signupSection = document.getElementById("signupSection");

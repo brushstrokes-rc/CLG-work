@@ -135,7 +135,7 @@ const dateInput = document.getElementById("dateInput");
 const attendanceBtn = document.getElementById("attendanceBtn");
 const attendanceSection = document.getElementById("attendanceSection");
 const attendanceBody = document.getElementById("attendanceBody");
-const saveBtn = document.getElementById("saveBtn");
+const viewBtn = document.getElementById("viewBtn");
 const saveDataBox = document.getElementById("saveDataBox");
 const saveDataTitle = document.getElementById("saveDataTitle");
 const presentListEl = document.getElementById("presentList");
@@ -251,6 +251,7 @@ else if (target.classList.contains("half-cell")) { name = target.dataset.student
   if (!attendanceData[dateStr]) attendanceData[dateStr] = {};
   attendanceData[dateStr][name] = status;
   markRow(name, dateStr);
+if (!saveDataBox.classList.contains("hidden")) renderSummary();
 
   try {
     await setDoc(doc(db, "attendance", dateStr), { [name]: status }, { merge: true });
@@ -284,10 +285,13 @@ function refreshTableForDate() {
   students.forEach(function (name) {
     markRow(name, dateStr);
   });
+  if (!saveDataBox.classList.contains("hidden")) renderSummary();
 }
 
+
 // Save button -> show present/absent list for the currently selected date
-saveBtn.addEventListener("click", function () {
+// Selected date ki present / half present list bharo
+function renderSummary() {
   const dateStr = toISO(selectedDate);
   const dayData = attendanceData[dateStr] || {};
 
@@ -299,26 +303,34 @@ saveBtn.addEventListener("click", function () {
     else if (dayData[name] === "half") half.push(name);
   });
 
-  saveDataTitle.textContent = "Save Data (" + toDisplay(selectedDate) + ")";
+  saveDataTitle.textContent = "Attendance (" + toDisplay(selectedDate) + ")";
   presentListEl.textContent = present.length ? present.join(", ") : "-";
   halfListEl.textContent = half.length ? half.join(", ") : "-";
+}
 
-  saveDataBox.classList.remove("hidden");
+// View Attendance -> box khol/band karo
+viewBtn.addEventListener("click", function () {
+  if (saveDataBox.classList.contains("hidden")) {
+    renderSummary();
+    saveDataBox.classList.remove("hidden");
+  } else {
+    saveDataBox.classList.add("hidden");
+  }
 });
 // Clear All -> selected date ki poori attendance delete
 clearAllBtn.addEventListener("click", async function () {
   const dateStr = toISO(selectedDate);
 
-  if (!confirm("Kya aap " + toDisplay(selectedDate) + " ki poori attendance clear karna chahte ho?")) return;
+  // pehle screen se turant hatao
+  delete attendanceData[dateStr];
+  refreshTableForDate();
+  saveDataBox.classList.add("hidden");
 
+  // phir Firebase se bhi delete
   try {
     await deleteDoc(doc(db, "attendance", dateStr));
-    delete attendanceData[dateStr];
-    refreshTableForDate();
-    saveDataBox.classList.add("hidden");
   } catch (err) {
     console.error("Clear failed:", err);
-    alert("Clear nahi ho paya, dobara try karo.");
   }
 });
 // ---------- Signup / Course dropdown / decide first screen ----------

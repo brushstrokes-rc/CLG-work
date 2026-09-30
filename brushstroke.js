@@ -446,25 +446,98 @@ window.addEventListener("load", function () {
 let studentList = []; // global array
 
 // App load hote hi students fetch karo
-async function loadStudentsFromFirebase() {
-  try {
-    const querySnapshot = await getDocs(collection(db, "students")); // "students" = apna collection name
-    studentList = [];
-    querySnapshot.forEach(doc => {
-      const data = doc.data();
-      studentList.push({
-        id: doc.id,
-        name: data.name || data.username, // jo field hai Firebase mein
-        rollNo: data.rollNo || data.roll_no || ''
+// ---------- Search Bar ----------
+function initSearchBar() {
+  const searchInput = document.getElementById('studentSearch');
+  const suggestionsBox = document.getElementById('searchSuggestions');
+  if (!searchInput || !suggestionsBox) return;
+
+  searchInput.addEventListener('input', function () {
+    const query = this.value.trim().toLowerCase();
+    suggestionsBox.innerHTML = '';
+
+    if (!query) {
+      suggestionsBox.style.display = 'none';
+      return;
+    }
+
+    const matches = students.filter(name =>
+      name.toLowerCase().includes(query)
+    );
+
+    if (matches.length === 0) {
+      suggestionsBox.innerHTML = '<div class="suggestion-no-result">No student found</div>';
+      suggestionsBox.style.display = 'block';
+      return;
+    }
+
+    matches.slice(0, 8).forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'suggestion-item';
+
+      // Matched text highlight karo
+      const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      item.innerHTML = name.replace(regex, '<span class="suggestion-highlight">$1</span>');
+
+      item.addEventListener('click', function () {
+        searchInput.value = name;
+        suggestionsBox.style.display = 'none';
+        scrollToStudent(name);
       });
+
+      suggestionsBox.appendChild(item);
     });
-    console.log(`${studentList.length} students loaded`);
-  } catch (error) {
-    console.error("Firebase fetch error:", error);
-  }
+
+    suggestionsBox.style.display = 'block';
+  });
+
+  // Bahar click karne pe suggestions band
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.search-wrapper')) {
+      suggestionsBox.style.display = 'none';
+    }
+  });
 }
 
-// Page load pe call karo
-window.addEventListener('DOMContentLoaded', () => {
-  loadStudentsFromFirebase();
-});
+// Student row pe scroll karo + blue dot dikhao
+function scrollToStudent(name) {
+  // Attendance section visible karo
+  if (attendanceSection.classList.contains('hidden')) {
+    attendanceSection.classList.remove('hidden');
+  }
+
+  // Row dhundo
+  const rows = attendanceBody.querySelectorAll('tr');
+  let targetRow = null;
+
+  rows.forEach(row => {
+    const nameCell = row.querySelector('.student-name');
+    if (nameCell && nameCell.textContent.trim() === name) {
+      targetRow = row;
+    }
+  });
+
+  if (!targetRow) return;
+
+  // Scroll to row
+  targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  // Blue dot add karo
+  const nameCell = targetRow.querySelector('.student-name');
+
+  // Pehle se koi dot ho toh hatao
+  const existingDot = nameCell.querySelector('.blue-dot');
+  if (existingDot) existingDot.remove();
+
+  const dot = document.createElement('span');
+  dot.className = 'blue-dot';
+  nameCell.insertBefore(dot, nameCell.firstChild);
+
+  // 3 sec baad hatao
+  setTimeout(() => {
+    dot.remove();
+  }, 3000);
+}
+
+// Init call
+initSearchBar();

@@ -69,18 +69,15 @@
   <!-- DASHBOARD / ATTENDANCE SECTION (hidden until login succeeds) -->
   <div class="page hidden" id="dashboardSection">
     <div class="brand">Brushstrokes</div>
-    <!-- Search Bar HTML - attendance section mein add karo -->
-<div class="search-container">
+    <div class="search-wrapper">
   <input 
     type="text" 
     id="studentSearch" 
-    placeholder="Search student by name or roll no..." 
+    placeholder="🔍 Search student..." 
     autocomplete="off"
-    oninput="handleSearch(this.value)"
   />
-  <div class="search-suggestions" id="searchSuggestions"></div>
+  <div id="searchSuggestions" class="search-suggestions"></div>
 </div>
- 
     <!-- Date picker: shows dd/mm/yy, click opens native calendar -->
     <div class="date-row">
       <button id="dateBtn" type="button" class="date-box">01/01/26</button>
@@ -111,7 +108,6 @@
     </div>
   </div>
     
-</script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js");

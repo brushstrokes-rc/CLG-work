@@ -443,8 +443,6 @@ window.addEventListener("load", function () {
 })();
 // brushstroke.js mein add karo
 
-import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.x.x/firebase-firestore.js";
-
 let studentList = []; // global array
 
 // App load hote hi students fetch karo

@@ -15,7 +15,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const toEmail = u => `${u.trim().toLowerCase()}@brushstrokes.app`;
+const toEmail = u => `${u.trim().toLowerCase().replace(/\s+/g, "")}@brushstrokes.app`;
 // ---------- Account storage (one account per device) ----------
 
 

@@ -443,7 +443,6 @@ window.addEventListener("load", function () {
 })();
 // brushstroke.js mein add karo
 
-import { db } from './firebase-config.js'; // apna firebase config path
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.x.x/firebase-firestore.js";
 
 let studentList = []; // global array

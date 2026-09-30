@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs, onSnapshot, deleteDoc }
+import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, deleteField }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -244,17 +244,30 @@ attendanceBody.addEventListener("click", async function (e) {
   const dateStr = toISO(selectedDate);
   let name = null, status = null;
 
-if (target.classList.contains("present-cell")) { name = target.dataset.student; status = "present"; }
-else if (target.classList.contains("half-cell")) { name = target.dataset.student; status = "half"; }
+  if (target.classList.contains("present-cell")) { name = target.dataset.student; status = "present"; }
+  else if (target.classList.contains("half-cell")) { name = target.dataset.student; status = "half"; }
   if (!name) return;
 
   if (!attendanceData[dateStr]) attendanceData[dateStr] = {};
-  attendanceData[dateStr][name] = status;
+
+  // same status par dobara click -> undo (pehle jaisa khaali)
+  const isUndo = attendanceData[dateStr][name] === status;
+
+  if (isUndo) {
+    delete attendanceData[dateStr][name];
+  } else {
+    attendanceData[dateStr][name] = status;
+  }
+
   markRow(name, dateStr);
-if (!saveDataBox.classList.contains("hidden")) renderSummary();
+  if (!saveDataBox.classList.contains("hidden")) renderSummary();
 
   try {
-    await setDoc(doc(db, "attendance", dateStr), { [name]: status }, { merge: true });
+    await setDoc(
+      doc(db, "attendance", dateStr),
+      { [name]: isUndo ? deleteField() : status },
+      { merge: true }
+    );
   } catch (err) {
     console.error("Save failed:", err);
   }

@@ -21,6 +21,7 @@ body.app-mode{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;c
   repeating-linear-gradient(45deg,rgba(255,255,255,.025) 0 2px,transparent 2px 5px),
   repeating-linear-gradient(-45deg,rgba(255,255,255,.025) 0 2px,transparent 2px 5px)}
 #appShell{display:flex;flex-direction:column;min-height:100vh}
+#appShell.hidden{display:none}   /* login se pehle shell chhupa rahe */
 #appShell main{flex:1;width:100%;max-width:980px;margin:0 auto;padding:0 14px 40px;overflow-x:hidden}
 
 /* header */
@@ -146,6 +147,8 @@ h2.sec-title{font-family:'Caveat Brush','Brush Script MT',cursive;font-weight:40
 
 /* attendance page: purana .page card ko beech me rakho */
 #viewAttendance{display:flex;justify-content:center;padding:24px 0 10px}
+/* attendance card hamesha safed hai, isliye uska text (student names) dark mode me bhi kala */
+#dashboardSection,#dashboardSection td,#dashboardSection p,#dashboardSection h3{color:#2b2b2b}
 
 /* footer + theme button */
 .app-footer{background:#6b7228;color:#f4f0d8;text-align:center;padding:22px 14px;font-size:14px;line-height:1.7;border-top:4px solid #565c1e}

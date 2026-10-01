@@ -1,4 +1,4 @@
-const CACHE_NAME = "brushstrokes-cache-v15.0";
+const CACHE_NAME = "brushstrokes-cache-v15.1";
 
 // Saari files jo offline chahiye
 const urlsToCache = [
@@ -9,9 +9,7 @@ const urlsToCache = [
   "brushstroke.js",
   "app-shell.js",
   "manifest.json",
-  "brushstroke.icon.jpeg",
-  "brushstrokes_logo.jpeg",
-  "ramanujan_logo.jpg"
+  "brushstroke.icon.jpeg"
 ];
 
 // Install: files cache mein daalo

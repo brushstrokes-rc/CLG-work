@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Brushstrokes</title>
     <!-- Normal browser tab icon -->
 <link rel="icon" type="image/jpeg" href="brushstroke.icon.jpeg">
 
@@ -13,7 +13,18 @@
 <!-- Android/Chrome home screen icon (PWA) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#ffffff">
+
+<!-- NAYA: fonts + theme (light/dark) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Caveat+Brush&display=swap" rel="stylesheet">
+<script>
+try{var __t=localStorage.getItem("bs-theme")}catch(e){}
+if(!__t)__t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";
+document.documentElement.dataset.theme=__t;
+</script>
+
 <link rel="stylesheet" href="brushstroke.css">
+<link rel="stylesheet" href="app-shell.css"><!-- NAYA: brushstroke.css ke baad -->
 </head>
 
 <body>
@@ -65,57 +76,181 @@
       <div id="message"></div>
     </form>
   </div>
- 
-  <!-- DASHBOARD / ATTENDANCE SECTION (hidden until login succeeds) -->
-  <div class="page hidden" id="dashboardSection">
-    <div class="brand">Brushstrokes</div>
-      <!-- Date picker: shows dd/mm/yy, click opens native calendar -->
-    <div class="date-row">
-      <button id="dateBtn" type="button" class="date-box">01/01/26</button>
-      <input type="date" id="dateInput" class="date-input-hidden">
-    </div> 
 
-    <div class="search-wrapper">
-  <input 
-    type="text" 
-    id="studentSearch" 
-    placeholder="🔍 Search student..." 
-    autocomplete="off"
-  />
-  <div id="searchSuggestions" class="search-suggestions"></div>
-</div>
-    <button id="attendanceBtn" class="attendance-box">Attendance</button>
- 
-    <div id="attendanceSection" class="attendance-section hidden">
-      <div class="action-row">
-  <button id="clearAllBtn" type="button" class="clear-all-btn">Clear All</button>
-</div>
-      <table id="attendanceTable">
-        <thead>
-          <tr>
-            <th>Student</th>
-            <th>Present</th>
-            <th>half-present</th>
-          </tr>
-        </thead>
-        <tbody id="attendanceBody"></tbody>
-      </table>
- 
-      <button id="viewBtn" class="save-btn">View Attendance</button>
+  <!-- ========== NAYA: APP SHELL (login ke baad yahi dikhta hai) ========== -->
+  <div id="appShell" class="hidden">
+    <header class="app-header">
+  <img class="logo" src="brushstrokes_logo.jpeg" alt="Brushstrokes logo">
+  <h1 class="brand-wrap" style="margin:0">
+    <svg class="brand-svg" viewBox="0 0 400 96" role="img" aria-label="Brushstrokes">
+      <defs>
+        <linearGradient id="sRainbow" x1="0" y1="0" x2="400" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#ff3b30"/>
+          <stop offset=".17" stop-color="#ff9500"/>
+          <stop offset=".34" stop-color="#ffd60a"/>
+          <stop offset=".5" stop-color="#34c759"/>
+          <stop offset=".67" stop-color="#2f9bff"/>
+          <stop offset=".84" stop-color="#a55eea"/>
+          <stop offset="1" stop-color="#ff4fa3"/>
+        </linearGradient>
+      </defs>
+      <g><text x="200" y="72" text-anchor="middle" textLength="360" lengthAdjust="spacingAndGlyphs">Brushstrokes</text></g>
+    </svg>
+  </h1>
+  <img class="logo" src="ramanujan_logo.jpg" alt="Ramanujan College logo">
+</header>
 
-        <div id="saveDataBox" class="save-data-box hidden">
-          <h3 id="saveDataTitle">Attendance</h3>
-          <p><strong>Present:</strong> <span id="presentList">-</span></p>
-          <p><strong>Half Present:</strong> <span id="halfList">-</span></p>
+    <nav class="app-nav" id="appNav">
+      <a href="#home" data-view="home" class="active">Home</a>
+      <a href="#attendance" data-view="attendance">Attendance</a>
+      <a href="#events" data-view="events">Events</a>
+      <a href="#core-members" data-view="home">Core Members</a>
+      <a href="#info" data-view="home">Info</a>
+      <a href="#announcements" data-view="home">Announcements</a>
+    </nav>
+
+    <button id="themeBtn" type="button" aria-label="Switch light or dark canvas mode">🌙</button>
+
+    <main>
+      <div id="viewHome">
+        <section class="dash">
+          <h1 class="dash-hi" id="dashHi">Welcome</h1>
+          <p class="dash-sub">Here are the details you registered with.</p>
+      
+          <section class="profile-card" id="profileCard" aria-label="Your details">
+            <div class="pc-head">
+              <div class="pc-avatar" id="pcAvatar" aria-hidden="true">?</div>
+              <div>
+                <h3 class="pc-name" id="pcName">—</h3>
+                <p class="pc-sub">Your details</p>
+              </div>
+            </div>
+            <div class="pc-rows">
+              <div class="pc-row">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.6-1.6 1.8-2.4 3-2.4s2.4.8 3 2.4M14 10h4M14 14h3"/></svg>
+                <div><span class="pc-label">Roll No.</span><span class="pc-value" id="pcRoll">—</span></div>
+              </div>
+              <div class="pc-row">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l9-4 9 4-9 4-9-4z"/><path d="M7 10.5V15c0 1.4 2.2 3 5 3s5-1.6 5-3v-4.5"/></svg>
+                <div><span class="pc-label">Course</span><span class="pc-value" id="pcCourse">—</span></div>
+              </div>
+            </div>
+          </section>
+        </section>
+      
+        <section class="hero">
+          <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div><div class="blob b5"></div>
+          <h1>Every stroke tells a story</h1>
+          <p>Colour it. Create it. Live it.</p>
+          <svg class="underline" viewBox="0 0 280 20"><defs><linearGradient id="ul" x1="0" x2="280" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ff3b30"/><stop offset=".33" stop-color="#ffd60a"/><stop offset=".66" stop-color="#2f9bff"/><stop offset="1" stop-color="#ff4fa3"/></linearGradient></defs><path d="M6 12 C60 4, 110 18, 160 9 S240 6, 274 11" fill="none" stroke="url(#ul)" stroke-width="7" stroke-linecap="round"/></svg>
+        </section>
+      
+        <section class="reveal">
+          <div class="quote-card">
+            <div class="q-box" id="qBox"><p class="q-text" id="qText"></p><div class="q-by" id="qBy"></div></div>
+            <div class="dots" id="qDots"></div>
+          </div>
+        </section>
+      
+        <section class="events" id="homeEvents">
+          <h2 class="sec-title">Events</h2>
+          <div class="ev-list" id="evList"></div>
+        </section>
+      </div>
+
+      <!-- ATTENDANCE PAGE: tumhara purana dashboardSection, bas class se "hidden" hata diya -->
+      <div id="viewAttendance" hidden>
+        <div class="page" id="dashboardSection">
+          <!-- Date picker: shows dd/mm/yy, click opens native calendar -->
+          <div class="date-row">
+            <button id="dateBtn" type="button" class="date-box">01/01/26</button>
+            <input type="date" id="dateInput" class="date-input-hidden">
+          </div> 
+
+          <div class="search-wrapper">
+            <input 
+              type="text" 
+              id="studentSearch" 
+              placeholder="🔍 Search student..." 
+              autocomplete="off"
+            />
+            <div id="searchSuggestions" class="search-suggestions"></div>
+          </div>
+          <button id="attendanceBtn" class="attendance-box">Attendance</button>
+
+          <div id="attendanceSection" class="attendance-section hidden">
+            <div class="action-row">
+              <button id="clearAllBtn" type="button" class="clear-all-btn">Clear All</button>
+            </div>
+            <table id="attendanceTable">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Present</th>
+                  <th>half-present</th>
+                </tr>
+              </thead>
+              <tbody id="attendanceBody"></tbody>
+            </table>
+
+            <button id="viewBtn" class="save-btn">View Attendance</button>
+
+            <div id="saveDataBox" class="save-data-box hidden">
+              <h3 id="saveDataTitle">Attendance</h3>
+              <p><strong>Present:</strong> <span id="presentList">-</span></p>
+              <p><strong>Half Present:</strong> <span id="halfList">-</span></p>
+            </div>
+          </div>
         </div>
-    </div>
+      </div>
+
+      <div id="viewEvents" hidden>
+        <section class="events">
+          <h2 class="sec-title">Add Event</h2>
+          <p class="ev-sub">Pick a date on the calendar, then fill in the event details.</p>
+      
+          <div class="cal" id="cal">
+            <div class="cal-head">
+              <button type="button" id="calPrev" aria-label="Previous month">&#8249;</button>
+              <b id="calTitle"></b>
+              <button type="button" id="calNext" aria-label="Next month">&#8250;</button>
+            </div>
+            <div class="cal-dow"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+            <div class="cal-grid" id="calGrid"></div>
+          </div>
+      
+          <form class="ev-form" id="evForm">
+            <p class="ev-picked">Event date: <b id="evPicked"></b></p>
+            <label for="evName">Event name</label>
+            <input type="text" id="evName" maxlength="80" required placeholder="e.g. Annual Art Exhibition">
+            <label for="evDesc">Description</label>
+            <textarea id="evDesc" maxlength="1000" placeholder="What is this event about?"></textarea>
+            <label for="evPhotos">Photos</label>
+            <input type="file" id="evPhotos" accept="image/*" multiple>
+            <p class="ev-hint" id="evHint">Up to 6 photos. They are resized automatically.</p>
+            <div class="ev-row"><button type="submit" class="ev-btn">Save Event</button></div>
+          </form>
+          <p class="ev-done" id="evDone" hidden>&#10003; Event added. It now shows under Events on the Home page.</p>
+        </section>
+      </div>
+    </main>
+
+    <footer class="app-footer">
+  <p class="f-top">Brushstroke Society &nbsp;·&nbsp; Ramanujan College &nbsp;·&nbsp; University of Delhi</p>
+  <p>Copyright © <a href="https://rdscell.in/" target="_blank" rel="noopener">RDSC</a> | Ramanujan College 2026</p>
+  <p><a href="https://ramanujancollege.ac.in/#" target="_blank" rel="noopener">Privacy Policy</a> &nbsp;|&nbsp; <a href="https://ramanujancollege.ac.in/#" target="_blank" rel="noopener">Terms of Use</a></p>
+</footer>
+
+    <div id="lightbox" role="dialog" aria-label="Photo preview"><img alt=""></div>
   </div>
-    
+  <!-- ========== /APP SHELL ========== -->
+
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js");
   }
 </script>
 <script type="module" src="brushstroke.js"></script>
+<script type="module" src="app-shell.js"></script><!-- NAYA: brushstroke.js ke baad -->
 </body>
 </html>

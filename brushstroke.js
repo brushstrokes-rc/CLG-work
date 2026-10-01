@@ -167,9 +167,7 @@ loginForm.addEventListener("submit", async function (e) {
     await signInWithEmailAndPassword(auth, toEmail(username), password);
     message.textContent = "Login successful!";
     message.className = "success";
-    loginSection.classList.add("hidden");
-    dashboardSection.classList.remove("hidden");
-    startAttendanceListener();
+    enterApp();
   } catch (err) {
     message.textContent = "Invalid username or password.";
     message.className = "error";
@@ -408,13 +406,19 @@ signupForm.addEventListener("submit", async function (e) {
     return;
   }
 
+let cred;
 try {
-  await createUserWithEmailAndPassword(auth, toEmail(username), password);
+  cred = await createUserWithEmailAndPassword(auth, toEmail(username), password);
 } catch (err) {
   signupMessage.textContent = err.message;
   signupMessage.className = "error";
   return;
 }
+try {
+  await setDoc(doc(db, "users", cred.user.uid), {
+    name: username, roll: rollNo, course: selectedCourse
+  });
+} catch (err) { console.error("Profile save failed:", err); }
 
   signupMessage.textContent = "Account created!";
   signupMessage.className = "success";
@@ -429,6 +433,7 @@ onAuthStateChanged(auth, function (user) {
     signupSection.classList.add("hidden");
     loginSection.classList.remove("hidden");
     startAttendanceListener();
+    window.dispatchEvent(new Event("bs:enter"));
   } else {
     signupSection.classList.remove("hidden");
     loginSection.classList.add("hidden");
@@ -579,3 +584,39 @@ function scrollToStudent(name) {
 
 // Init call
 initSearchBar();
+const appShell = document.getElementById("appShell");
+
+function enterApp() {
+  loginSection.classList.add("hidden");
+  appShell.classList.remove("hidden");
+  startAttendanceListener();
+  loadProfile();
+  showApp("home");
+}
+
+async function loadProfile() {
+  const user = auth.currentUser;
+  if (!user) return;
+  let p = { name: user.email.split("@")[0], roll: "", course: "" };
+  try {
+    const s = await getDoc(doc(db, "users", user.uid));
+    if (s.exists()) p = s.data();
+  } catch (e) { console.error(e); }
+  renderProfileCard(p);   // dashboard-demo.html se copy karo
+}
+
+function showApp(view) {   // view: "home" | "attendance" | "events"
+  ["Home", "Attendance", "Events"].forEach(function (v) {
+    document.getElementById("view" + v).hidden = (v.toLowerCase() !== view);
+  });
+  document.querySelectorAll("#appNav a").forEach(function (a) {
+    a.classList.toggle("active", a.dataset.view === view);
+  });
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("#appNav a").forEach(function (a) {
+  a.addEventListener("click", function (e) {
+    e.preventDefault();
+    showApp(a.dataset.view || "home");
+  });
+});

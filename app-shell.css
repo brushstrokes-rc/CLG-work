@@ -146,9 +146,11 @@ h2.sec-title{font-family:'Caveat Brush','Brush Script MT',cursive;font-weight:40
 .cal-grid .sel.has::after{background:var(--s-card)}
 
 /* attendance page: purana .page card ko beech me rakho */
-#viewAttendance{display:flex;justify-content:center;padding:24px 0 10px}
+#viewAttendance{display:flex;justify-content:center;align-items:flex-start;flex-wrap:wrap;gap:16px;padding:24px 0 10px}
+#viewAttendance>.page{width:auto;flex:1 1 340px;min-width:0}
 /* attendance card hamesha safed hai, isliye uska text (student names) dark mode me bhi kala */
 #dashboardSection,#dashboardSection td,#dashboardSection p,#dashboardSection h3{color:#2b2b2b}
+#atPanel{color:#2b2b2b}   /* events panel bhi safed card hai */
 
 /* footer + theme button */
 .app-footer{background:#6b7228;color:#f4f0d8;text-align:center;padding:22px 14px;font-size:14px;line-height:1.7;border-top:4px solid #565c1e}

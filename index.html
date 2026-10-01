@@ -161,11 +161,30 @@ document.documentElement.dataset.theme=__t;
       <!-- ATTENDANCE PAGE: tumhara purana dashboardSection, bas class se "hidden" hata diya -->
       <div id="viewAttendance" hidden>
         <div class="page" id="dashboardSection">
-          <!-- Date picker: shows dd/mm/yy, click opens native calendar -->
-          <div class="date-row">
+          <!-- Offline / Online buttons (heading ke left me) -->
+          <div class="mode-head">
+            <div class="mode-btns">
+              <button type="button" id="modeOffBtn" class="mode-btn mode-off active" aria-pressed="true">Offline</button>
+              <button type="button" id="modeOnBtn" class="mode-btn mode-on" aria-pressed="false">Online</button>
+            </div>
+            <div class="brand">Brushstrokes</div>
+            <div></div>
+          </div>
+
+          <!-- Date picker: shows dd/mm/yy, click opens native calendar. Pencil = event name -->
+          <div class="date-row date-row-flex">
             <button id="dateBtn" type="button" class="date-box">01/01/26</button>
             <input type="date" id="dateInput" class="date-input-hidden">
-          </div> 
+            <button id="editTitleBtn" type="button" class="edit-btn" aria-label="Edit event name">&#9999;&#65039;</button>
+          </div>
+
+          <div id="titleRow" class="title-row">
+            <div class="title-input-row">
+              <input type="text" id="titleIn" maxlength="80" placeholder="Event name" autocomplete="off">
+              <button type="button" id="saveTitleBtn" class="title-save">Save</button>
+            </div>
+            <p id="titleNote" class="title-note"></p>
+          </div>
 
           <div class="search-wrapper">
             <input 
@@ -202,6 +221,36 @@ document.documentElement.dataset.theme=__t;
             </div>
           </div>
         </div>
+        <!-- EVENTS PANEL (attendance events): right side, mobile par neeche -->
+        <aside class="page at-panel" id="atPanel" aria-label="Events with attendance">
+          <div class="at-head">
+            <h3>Events</h3>
+            <span class="at-count" id="atCount"></span>
+          </div>
+
+          <div class="at-search">
+            <input type="text" id="atSearch" placeholder="&#128269; Search event..." autocomplete="off">
+            <div id="atSuggest" class="at-suggest"></div>
+          </div>
+
+          <p class="at-empty" id="atEmpty">No events yet. Mark attendance, type an event name and press Save.</p>
+          <div class="at-list" id="atList"></div>
+
+          <div class="at-detail" id="atDetail" hidden>
+            <div class="at-detail-head">
+              <b id="atDetailTitle"></b>
+              <span class="at-count" id="atDetailSum"></span>
+            </div>
+            <p class="at-detail-sub" id="atDetailSub"></p>
+            <div class="at-table-wrap">
+              <table class="at-table">
+                <colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup>
+                <thead><tr><th>Student</th><th>Present</th><th>Half present</th></tr></thead>
+                <tbody id="atTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </aside>
       </div>
 
       <div id="viewEvents" hidden>

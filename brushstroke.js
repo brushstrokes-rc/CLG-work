@@ -107,19 +107,66 @@ const students = [
   "Ayushman Singh"
 ];
 
-// Attendance data stored per date: { "2026-09-24": { "Rupam Nama": "present", ... }, ... }
-// Firestore ("attendance" collection) se live sync hota hai
-let attendanceData = {};
+// ---------- Attendance data ----------
+// Firestore ki wahi purani "attendance" collection (isliye rules me kuch badalna nahi padega):
+//   "2026-09-29_offline" / "2026-09-29_online" -> { "Rupam Nama": "present" | "half", _title: "Event name" }
+//   "2026-09-24" (purana format, bina mode ke)  -> Offline maana jata hai
+let rawDocs = {};            // docId -> Firestore data
+let sessions = {};           // "yyyy-mm-dd|offline" -> { id, date, mode, title, marks }
+let currentMode = "offline"; // left wale Offline / Online button se badalta hai
+let selectedEventKey = null; // right panel me kaun sa event khula hai
 let unsubscribeAttendance = null;
+
+function sessionKey(dateStr, mode) { return dateStr + "|" + mode; }
+function modeLabel(mode) { return mode === "online" ? "Online" : "Offline"; }
+
+function makeSession(id, date, mode) {
+  const d = rawDocs[id] || {};
+  const marks = {};
+  Object.keys(d).forEach(function (k) {
+    if (k === "_title") return;
+    if (d[k] === "present" || d[k] === "half") marks[k] = d[k];
+  });
+  return { id: id, date: date, mode: mode, title: d._title || "", marks: marks };
+}
+
+function buildSessions() {
+  sessions = {};
+  const legacy = [];
+  Object.keys(rawDocs).forEach(function (id) {
+    const m = id.match(/^(\d{4}-\d{2}-\d{2})(?:_(offline|online))?$/);
+    if (!m) return;
+    if (!m[2]) { legacy.push(id); return; }
+    sessions[sessionKey(m[1], m[2])] = makeSession(id, m[1], m[2]);
+  });
+  // purane docs (bina mode): Offline maano, agar us date ka naya offline doc nahi hai
+  legacy.forEach(function (id) {
+    const k = sessionKey(id, "offline");
+    if (!sessions[k]) sessions[k] = makeSession(id, id, "offline");
+  });
+}
+
+// write karte waqt kaunsa doc use hoga (purana doc ho to wahi, warna naya "date_mode")
+function docIdFor(dateStr, mode) {
+  const s = sessions[sessionKey(dateStr, mode)];
+  return s ? s.id : dateStr + "_" + mode;
+}
+
+function currentSession() {
+  return sessions[sessionKey(toISO(selectedDate), currentMode)];
+}
 
 function startAttendanceListener() {
   if (unsubscribeAttendance) return;
   unsubscribeAttendance = onSnapshot(
     collection(db, "attendance"),
     function (snap) {
-      attendanceData = {};
-      snap.forEach(function (d) { attendanceData[d.id] = d.data(); });
+      rawDocs = {};
+      snap.forEach(function (d) { rawDocs[d.id] = d.data(); });
+      buildSessions();
       refreshTableForDate();
+      renderEventsPanel();
+      syncTitleInput(false);
     },
     function (err) {
       // permission-denied: ye user "admins" collection me nahi hai
@@ -149,6 +196,27 @@ const saveDataTitle = document.getElementById("saveDataTitle");
 const presentListEl = document.getElementById("presentList");
 const halfListEl = document.getElementById("halfList");
 const clearAllBtn = document.getElementById("clearAllBtn");
+
+// Offline / Online + event name
+const modeOffBtn = document.getElementById("modeOffBtn");
+const modeOnBtn = document.getElementById("modeOnBtn");
+const editTitleBtn = document.getElementById("editTitleBtn");
+const titleRow = document.getElementById("titleRow");
+const titleIn = document.getElementById("titleIn");
+const saveTitleBtn = document.getElementById("saveTitleBtn");
+const titleNote = document.getElementById("titleNote");
+
+// Events panel (right side)
+const atCount = document.getElementById("atCount");
+const atSearch = document.getElementById("atSearch");
+const atSuggest = document.getElementById("atSuggest");
+const atList = document.getElementById("atList");
+const atEmpty = document.getElementById("atEmpty");
+const atDetail = document.getElementById("atDetail");
+const atDetailTitle = document.getElementById("atDetailTitle");
+const atDetailSum = document.getElementById("atDetailSum");
+const atDetailSub = document.getElementById("atDetailSub");
+const atTableBody = document.getElementById("atTableBody");
 
 // ---------- Date helpers ----------
 function pad(n) {
@@ -209,8 +277,9 @@ dateInput.addEventListener("change", function () {
   selectedDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
 
   dateBtn.textContent = toDisplay(selectedDate);
+  syncTitleInput(true);
+  setNote(HINT);
   refreshTableForDate();
-  saveDataBox.classList.add("hidden");
 });
 
 // ---------- Attendance dashboard ----------
@@ -247,33 +316,32 @@ function buildTable() {
 buildTable();
 refreshTableForDate();
 
-// Click on a "Present" / "Absent" cell -> save it under the selected date
+// "Present" / "Half present" cell par click -> selected date + mode me autosave
 attendanceBody.addEventListener("click", async function (e) {
   const target = e.target;
-  const dateStr = toISO(selectedDate);
   let name = null, status = null;
 
   if (target.classList.contains("present-cell")) { name = target.dataset.student; status = "present"; }
   else if (target.classList.contains("half-cell")) { name = target.dataset.student; status = "half"; }
   if (!name) return;
 
-  if (!attendanceData[dateStr]) attendanceData[dateStr] = {};
+  const dateStr = toISO(selectedDate);
+  const id = docIdFor(dateStr, currentMode);
+  const sess = currentSession();
 
   // same status par dobara click -> undo (pehle jaisa khaali)
-  const isUndo = attendanceData[dateStr][name] === status;
+  const isUndo = !!sess && sess.marks[name] === status;
 
-  if (isUndo) {
-    delete attendanceData[dateStr][name];
-  } else {
-    attendanceData[dateStr][name] = status;
-  }
+  if (!rawDocs[id]) rawDocs[id] = {};
+  if (isUndo) delete rawDocs[id][name];
+  else rawDocs[id][name] = status;
 
-  markRow(name, dateStr);
-  if (!saveDataBox.classList.contains("hidden")) renderSummary();
+  buildSessions();
+  renderAll();
 
   try {
     await setDoc(
-      doc(db, "attendance", dateStr),
+      doc(db, "attendance", id),
       { [name]: isUndo ? deleteField() : status },
       { merge: true }
     );
@@ -282,10 +350,10 @@ attendanceBody.addEventListener("click", async function (e) {
   }
 });
 
-// Update the visual state (green/red) of a student's row for a given date
-function markRow(name, dateStr) {
-  const dayData = attendanceData[dateStr] || {};
-  const status = dayData[name];
+// Ek student ki row ka color (green / blue) selected date + mode ke hisaab se
+function markRow(name) {
+  const s = currentSession();
+  const status = s ? s.marks[name] : undefined;
 
   const presentCell = attendanceBody.querySelector('.present-cell[data-student="' + name + '"]');
   const halfCell = attendanceBody.querySelector('.half-cell[data-student="' + name + '"]');
@@ -300,32 +368,33 @@ function markRow(name, dateStr) {
   }
 }
 
-// Re-paint the whole table to match whichever date is currently selected
-// (so switching dates shows/edits that day's attendance)
+// Poori table dobara paint karo (date ya mode badalne par us ki attendance dikhe)
 function refreshTableForDate() {
-  const dateStr = toISO(selectedDate);
-  students.forEach(function (name) {
-    markRow(name, dateStr);
-  });
+  students.forEach(function (name) { markRow(name); });
   if (!saveDataBox.classList.contains("hidden")) renderSummary();
 }
 
+// Left table + right Events panel dono update
+function renderAll() {
+  refreshTableForDate();
+  renderEventsPanel();
+}
 
-// Save button -> show present/absent list for the currently selected date
-// Selected date ki present / half present list bharo
+
+// View Attendance: selected date + mode ki present / half present list
 function renderSummary() {
-  const dateStr = toISO(selectedDate);
-  const dayData = attendanceData[dateStr] || {};
+  const sess = currentSession();
+  const marks = sess ? sess.marks : {};
 
   const present = [];
   const half = [];
 
   students.forEach(function (name) {
-    if (dayData[name] === "present") present.push(name);
-    else if (dayData[name] === "half") half.push(name);
+    if (marks[name] === "present") present.push(name);
+    else if (marks[name] === "half") half.push(name);
   });
 
-  saveDataTitle.textContent = "Attendance (" + toDisplay(selectedDate) + ")";
+  saveDataTitle.textContent = toDisplay(selectedDate) + " (" + modeLabel(currentMode) + ")";
   presentListEl.textContent = present.length ? present.join(", ") : "-";
   halfListEl.textContent = half.length ? half.join(", ") : "-";
 }
@@ -339,22 +408,244 @@ viewBtn.addEventListener("click", function () {
     saveDataBox.classList.add("hidden");
   }
 });
-// Clear All -> selected date ki poori attendance delete
+// Clear All -> selected date + mode (Offline ya Online) ki attendance hatao.
+// Event name (agar diya hai) bacha rehta hai.
 clearAllBtn.addEventListener("click", async function () {
-  const dateStr = toISO(selectedDate);
+  const sess = currentSession();
+  if (!sess) return;
+  const id = sess.id;
+  const title = sess.title;
 
   // pehle screen se turant hatao
-  delete attendanceData[dateStr];
-  refreshTableForDate();
-  saveDataBox.classList.add("hidden");
+  if (title) rawDocs[id] = { _title: title };
+  else delete rawDocs[id];
+  buildSessions();
+  renderAll();
 
-  // phir Firebase se bhi delete
+  // phir Firebase se
   try {
-    await deleteDoc(doc(db, "attendance", dateStr));
+    if (title) await setDoc(doc(db, "attendance", id), { _title: title });
+    else await deleteDoc(doc(db, "attendance", id));
   } catch (err) {
     console.error("Clear failed:", err);
   }
 });
+
+// ---------- Offline / Online buttons ----------
+const HINT = "Attendance autosaves. Add a name to show it in Events.";
+
+function setNote(text, isErr) {
+  titleNote.textContent = text;
+  titleNote.classList.toggle("err", !!isErr);
+}
+
+function updateModeButtons() {
+  const off = currentMode === "offline";
+  modeOffBtn.classList.toggle("active", off);
+  modeOnBtn.classList.toggle("active", !off);
+  modeOffBtn.setAttribute("aria-pressed", String(off));
+  modeOnBtn.setAttribute("aria-pressed", String(!off));
+}
+
+// Event name wala box us date + mode ke title se bhar do
+// (force=false: agar user abhi type kar raha hai to uska text na badlo)
+function syncTitleInput(force) {
+  if (!force && document.activeElement === titleIn) return;
+  const sess = currentSession();
+  titleIn.value = sess ? sess.title : "";
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  updateModeButtons();
+  syncTitleInput(true);
+  setNote(HINT);
+  refreshTableForDate();
+  attendanceSection.classList.remove("hidden"); // mode dabate hi table khul jaye
+}
+
+modeOffBtn.addEventListener("click", function () { setMode("offline"); });
+modeOnBtn.addEventListener("click", function () { setMode("online"); });
+
+// ---------- Event name (pencil + Save) ----------
+editTitleBtn.addEventListener("click", function () {
+  titleRow.classList.toggle("hidden");
+  if (!titleRow.classList.contains("hidden")) titleIn.focus();
+});
+
+titleIn.addEventListener("input", function () { setNote(HINT); });
+titleIn.addEventListener("keydown", function (e) {
+  if (e.key === "Enter") { e.preventDefault(); saveTitleBtn.click(); }
+});
+
+saveTitleBtn.addEventListener("click", async function () {
+  const value = titleIn.value.trim();
+  if (!value) { setNote("Enter an event name first.", true); return; }
+
+  const dateStr = toISO(selectedDate);
+  const id = docIdFor(dateStr, currentMode);
+
+  if (!rawDocs[id]) rawDocs[id] = {};
+  rawDocs[id]._title = value;
+  buildSessions();
+  selectedEventKey = sessionKey(dateStr, currentMode);
+  renderEventsPanel();
+  setNote("Saved. It now shows in Events.");
+
+  try {
+    await setDoc(doc(db, "attendance", id), { _title: value }, { merge: true });
+  } catch (err) {
+    console.error("Event name save failed:", err);
+    setNote("Couldn't save the event name. Try again.", true);
+  }
+});
+
+// ---------- Events panel (right side) ----------
+function isoToDisplay(iso) {
+  const p = iso.split("-");
+  return p[2] + "/" + p[1] + "/" + p[0].slice(-2);
+}
+
+function sessionTag(s) {
+  return "Attendance (" + modeLabel(s.mode) + ")";
+}
+
+// sirf wahi sessions jinka event name save hua hai (nayi date upar)
+function eventList() {
+  return Object.keys(sessions)
+    .map(function (k) { return sessions[k]; })
+    .filter(function (s) { return s.title; })
+    .sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return a.mode < b.mode ? -1 : 1;
+    });
+}
+
+function renderEventsPanel() {
+  const list = eventList();
+  atCount.textContent = list.length + (list.length === 1 ? " event" : " events");
+  atList.replaceChildren();
+  atEmpty.hidden = list.length > 0;
+  atDetail.hidden = list.length === 0;
+  if (!list.length) return;
+
+  const exists = list.some(function (s) { return sessionKey(s.date, s.mode) === selectedEventKey; });
+  if (!exists) selectedEventKey = sessionKey(list[0].date, list[0].mode);
+
+  list.forEach(function (s) {
+    const key = sessionKey(s.date, s.mode);
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "at-ev" + (key === selectedEventKey ? " on" : "");
+
+    const main = document.createElement("span");
+    main.className = "at-ev-main";
+    const title = document.createElement("span");
+    title.className = "at-ev-title";
+    title.textContent = s.title;
+    const tag = document.createElement("span");
+    tag.className = "at-ev-tag " + (s.mode === "online" ? "tag-on" : "tag-off");
+    tag.textContent = sessionTag(s);
+    main.appendChild(title);
+    main.appendChild(tag);
+
+    const date = document.createElement("span");
+    date.className = "at-ev-date";
+    date.textContent = isoToDisplay(s.date);
+
+    btn.appendChild(main);
+    btn.appendChild(date);
+    btn.addEventListener("click", function () {
+      selectedEventKey = key;
+      renderEventsPanel();
+    });
+    atList.appendChild(btn);
+  });
+
+  renderEventDetail(sessions[selectedEventKey]);
+}
+
+// Selected event ki attendance table (sirf dekhne ke liye)
+function renderEventDetail(s) {
+  atDetailTitle.textContent = s.title;
+  atDetailSub.textContent = sessionTag(s) + ", " + isoToDisplay(s.date);
+
+  let presentCount = 0, halfCount = 0;
+  atTableBody.replaceChildren();
+
+  students.forEach(function (name) {
+    const status = s.marks[name];
+    if (status === "present") presentCount++;
+    else if (status === "half") halfCount++;
+
+    const tr = document.createElement("tr");
+    const nameCell = document.createElement("td");
+    nameCell.className = "nm";
+    nameCell.textContent = name;
+    const presentCell = document.createElement("td");
+    if (status === "present") presentCell.className = "p";
+    const halfCell = document.createElement("td");
+    if (status === "half") halfCell.className = "h";
+
+    tr.appendChild(nameCell);
+    tr.appendChild(presentCell);
+    tr.appendChild(halfCell);
+    atTableBody.appendChild(tr);
+  });
+
+  atDetailSum.textContent = presentCount + " present, " + halfCount + " half present";
+}
+
+// Event search (suggestions)
+atSearch.addEventListener("input", function () {
+  const q = atSearch.value.trim().toLowerCase();
+  atSuggest.replaceChildren();
+
+  if (!q) { atSuggest.style.display = "none"; return; }
+
+  const matches = eventList().filter(function (s) {
+    const hay = (s.title + " attendance " + s.mode + " " + isoToDisplay(s.date) + " " + s.date).toLowerCase();
+    return hay.includes(q);
+  });
+
+  if (matches.length === 0) {
+    const none = document.createElement("div");
+    none.className = "at-sg none";
+    none.textContent = "No event found";
+    atSuggest.appendChild(none);
+  } else {
+    matches.slice(0, 6).forEach(function (s) {
+      const item = document.createElement("div");
+      item.className = "at-sg";
+      const label = document.createElement("span");
+      label.textContent = s.title + " (" + modeLabel(s.mode) + ")";
+      const date = document.createElement("span");
+      date.className = "at-sg-date";
+      date.textContent = isoToDisplay(s.date);
+      item.appendChild(label);
+      item.appendChild(date);
+      item.addEventListener("click", function () {
+        selectedEventKey = sessionKey(s.date, s.mode);
+        atSearch.value = s.title;
+        atSuggest.style.display = "none";
+        renderEventsPanel();
+      });
+      atSuggest.appendChild(item);
+    });
+  }
+  atSuggest.style.display = "block";
+});
+
+document.addEventListener("click", function (e) {
+  if (!e.target.closest(".at-search")) atSuggest.style.display = "none";
+});
+
+// Pehli baar screen set karo
+updateModeButtons();
+setNote(HINT);
+renderEventsPanel();
+
 // ---------- Signup / Course dropdown / decide first screen ----------
 const signupSection = document.getElementById("signupSection");
 const signupForm = document.getElementById("signupForm");

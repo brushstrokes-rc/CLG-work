@@ -869,3 +869,56 @@ input[type="password"]::-webkit-contacts-auto-fill-button {
   .page { padding: 22px 14px; }
 }
 
+/* Attendance Summary table borders fix */
+#avTable {
+  width: 100%;
+  overflow-x: auto;
+}
+
+#avTable table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: 1px solid #d8cfc4;
+}
+
+#avTable th,
+#avTable td {
+  width: 33.333%;
+  border: 1px solid #d8cfc4;
+  padding: 10px 6px;
+  text-align: center;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+#avTable th {
+  color: #fff;
+  font-weight: 700;
+  border-color: #ffffff;
+}
+
+#avTable th.p {
+  background: #2e7d32;
+}
+
+#avTable th.h {
+  background: #1d6fd8;
+}
+
+#avTable th.a {
+  background: #c0392b;
+}
+
+#avTable tbody tr:nth-child(even) {
+  background: #faf6f1;
+}
+
+#avTable tbody tr:nth-child(odd) {
+  background: #ffffff;
+}
+
+#avTable tbody td {
+  color: #333;
+  border-color: #d8cfc4;
+}

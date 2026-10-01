@@ -108,17 +108,25 @@ const students = [
 ];
 
 // Attendance data stored per date: { "2026-09-24": { "Rupam Nama": "present", ... }, ... }
-// Persisted in the browser's localStorage so it survives reloads / closing the tab
+// Firestore ("attendance" collection) se live sync hota hai
 let attendanceData = {};
 let unsubscribeAttendance = null;
 
 function startAttendanceListener() {
   if (unsubscribeAttendance) return;
-  unsubscribeAttendance = onSnapshot(collection(db, "attendance"), function (snap) {
-    attendanceData = {};
-    snap.forEach(function (d) { attendanceData[d.id] = d.data(); });
-    refreshTableForDate();
-  });
+  unsubscribeAttendance = onSnapshot(
+    collection(db, "attendance"),
+    function (snap) {
+      attendanceData = {};
+      snap.forEach(function (d) { attendanceData[d.id] = d.data(); });
+      refreshTableForDate();
+    },
+    function (err) {
+      // permission-denied: ye user "admins" collection me nahi hai
+      console.error("Attendance access denied:", err.code);
+      unsubscribeAttendance = null;
+    }
+  );
 }
 // Currently selected date (defaults to today)
 let selectedDate = new Date();
@@ -167,7 +175,10 @@ loginForm.addEventListener("submit", async function (e) {
     await signInWithEmailAndPassword(auth, toEmail(username), password);
     message.textContent = "Login successful!";
     message.className = "success";
-    enterApp();
+    loginSection.classList.add("hidden");
+    startAttendanceListener();
+    // app-shell.js ye event sunke Home page (header + navbar) khol deta hai
+    window.dispatchEvent(new Event("bs:enter"));
   } catch (err) {
     message.textContent = "Invalid username or password.";
     message.className = "error";
@@ -406,19 +417,19 @@ signupForm.addEventListener("submit", async function (e) {
     return;
   }
 
-let cred;
-try {
-  cred = await createUserWithEmailAndPassword(auth, toEmail(username), password);
-} catch (err) {
-  signupMessage.textContent = err.message;
-  signupMessage.className = "error";
-  return;
-}
-try {
-  await setDoc(doc(db, "users", cred.user.uid), {
-    name: username, roll: rollNo, course: selectedCourse
-  });
-} catch (err) { console.error("Profile save failed:", err); }
+  let cred;
+  try {
+    cred = await createUserWithEmailAndPassword(auth, toEmail(username), password);
+  } catch (err) {
+    signupMessage.textContent = err.message;
+    signupMessage.className = "error";
+    return;
+  }
+  try {
+    await setDoc(doc(db, "users", cred.user.uid), {
+      name: username, roll: rollNo, course: selectedCourse
+    });
+  } catch (err) { console.error("Profile save failed:", err); }
 
   signupMessage.textContent = "Account created!";
   signupMessage.className = "success";
@@ -428,12 +439,12 @@ try {
 });
 
 // Decide which screen to show first when page loads
+// (pehle jaisa: hamesha login ya signup dikhao, app direct nahi kholna)
 onAuthStateChanged(auth, function (user) {
   if (user) {
     signupSection.classList.add("hidden");
     loginSection.classList.remove("hidden");
     startAttendanceListener();
-    window.dispatchEvent(new Event("bs:enter"));
   } else {
     signupSection.classList.remove("hidden");
     loginSection.classList.add("hidden");
@@ -584,39 +595,6 @@ function scrollToStudent(name) {
 
 // Init call
 initSearchBar();
-const appShell = document.getElementById("appShell");
 
-function enterApp() {
-  loginSection.classList.add("hidden");
-  appShell.classList.remove("hidden");
-  startAttendanceListener();
-  loadProfile();
-  showApp("home");
-}
-
-async function loadProfile() {
-  const user = auth.currentUser;
-  if (!user) return;
-  let p = { name: user.email.split("@")[0], roll: "", course: "" };
-  try {
-    const s = await getDoc(doc(db, "users", user.uid));
-    if (s.exists()) p = s.data();
-  } catch (e) { console.error(e); }
-  renderProfileCard(p);   // dashboard-demo.html se copy karo
-}
-
-function showApp(view) {   // view: "home" | "attendance" | "events"
-  ["Home", "Attendance", "Events"].forEach(function (v) {
-    document.getElementById("view" + v).hidden = (v.toLowerCase() !== view);
-  });
-  document.querySelectorAll("#appNav a").forEach(function (a) {
-    a.classList.toggle("active", a.dataset.view === view);
-  });
-  window.scrollTo(0, 0);
-}
-document.querySelectorAll("#appNav a").forEach(function (a) {
-  a.addEventListener("click", function (e) {
-    e.preventDefault();
-    showApp(a.dataset.view || "home");
-  });
-});
+// NOTE: Home page / navbar / profile card ka saara code app-shell.js me hai.
+// (pehle yahan enterApp / loadProfile / showApp the — wo hata diye, kyunki app-shell.js unhe handle karta hai)

@@ -868,9 +868,4 @@ input[type="password"]::-webkit-contacts-auto-fill-button {
 @media (max-width: 520px) {
   .page { padding: 22px 14px; }
 }
-.app-header .logo {
-  width: 72px;
-  height: 72px;
-  object-fit: contain;
-  margin: 6px 0;
-}
+

@@ -25,8 +25,17 @@ body.app-mode{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;c
 #appShell main{flex:1;width:100%;max-width:980px;margin:0 auto;padding:0 14px 40px;overflow-x:hidden}
 
 /* header */
-.app-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--s-header);box-shadow:0 2px 8px rgba(0,0,0,.35)}
-.app-header .logo{width:clamp(44px,12vw,64px);height:clamp(44px,12vw,64px);border-radius:50%;background:#fff;object-fit:cover;border:2px solid #f3e3c3;flex-shrink:0}
+.app-header{display:flex;align-items:center;justify-content:space-between;padding:5px 14px;background:var(--s-header);box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.app-header .logo{
+  width:82px;
+  height:82px;
+  margin:5px 0;
+  border-radius:50%;
+  background:#fff;
+  object-fit:cover;
+  border:2px solid #f3e3c3;
+  flex-shrink:0;
+}
 .brand-wrap{flex:1;display:flex;justify-content:center;min-width:0;padding:0 6px;margin:0}
 .brand-svg{width:100%;max-width:360px;height:auto;display:block;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
 .brand-svg text{font-family:'Caveat','Segoe Script','Brush Script MT',cursive;font-size:92px;font-weight:600;fill:url(#sRainbow);stroke:url(#sRainbow);stroke-width:.5px;stroke-linejoin:round;stroke-linecap:round}

@@ -400,26 +400,36 @@ function renderSummary() {
 }
 
 // View Attendance -> box khol/band karo
+
+
 function buildAttendanceSnapshot() {
-  const dateStr = toISO(selectedDate);
-  const dayData = attendanceData[dateStr] || {};
-  const present = [], half = [], absent = [];
+  const sess = currentSession();
+  const marks = sess ? sess.marks : {};
+
+  const present = [];
+  const half = [];
+  const absent = [];
 
   students.forEach(function (name) {
-    if (dayData[name] === "present") present.push(name);
-    else if (dayData[name] === "half") half.push(name);
-    else absent.push(name);           // kuch mark nahi = absent
+    if (marks[name] === "present") {
+      present.push(name);
+    } else if (marks[name] === "half") {
+      half.push(name);
+    } else {
+      absent.push(name);
+    }
   });
 
   return {
-    title: "Attendance",    // YAHAN: event ki attendance ho to event ka naam
+    title: sess && sess.title ? sess.title : "Attendance",
     date: toDisplay(selectedDate),
-    fileDate: dateStr,
-    mode: "",               // YAHAN: apna online/offline variable ("Online" ya "Offline")
-    present: present, half: half, absent: absent
+    fileDate: toISO(selectedDate),
+    mode: modeLabel(currentMode),
+    present: present,
+    half: half,
+    absent: absent
   };
 }
-
 viewBtn.addEventListener("click", function () {
   window.bsOpenAttendanceView(buildAttendanceSnapshot());
 });
@@ -571,11 +581,35 @@ function renderEventsPanel() {
 
     btn.appendChild(main);
     btn.appendChild(date);
-    btn.addEventListener("click", function () {
-      selectedEventKey = key;
-      renderEventsPanel();
-    });
-    atList.appendChild(btn);
+    
+btn.addEventListener("click", function () {
+  selectedEventKey = key;
+
+  const sess = sessions[key];
+  if (!sess) return;
+
+  const present = [];
+  const half = [];
+  const absent = [];
+
+  students.forEach(function (name) {
+    const status = sess.marks[name];
+
+    if (status === "present") present.push(name);
+    else if (status === "half") half.push(name);
+    else absent.push(name);
+  });
+
+  window.bsOpenAttendanceView({
+    title: sess.title || "Attendance",
+    date: isoToDisplay(sess.date),
+    fileDate: sess.date,
+    mode: modeLabel(sess.mode),
+    present: present,
+    half: half,
+    absent: absent
+  });
+});
   });
 
   renderEventDetail(sessions[selectedEventKey]);

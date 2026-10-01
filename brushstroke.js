@@ -400,13 +400,28 @@ function renderSummary() {
 }
 
 // View Attendance -> box khol/band karo
+function buildAttendanceSnapshot() {
+  const dateStr = toISO(selectedDate);
+  const dayData = attendanceData[dateStr] || {};
+  const present = [], half = [], absent = [];
+
+  students.forEach(function (name) {
+    if (dayData[name] === "present") present.push(name);
+    else if (dayData[name] === "half") half.push(name);
+    else absent.push(name);           // kuch mark nahi = absent
+  });
+
+  return {
+    title: "Attendance",    // YAHAN: event ki attendance ho to event ka naam
+    date: toDisplay(selectedDate),
+    fileDate: dateStr,
+    mode: "",               // YAHAN: apna online/offline variable ("Online" ya "Offline")
+    present: present, half: half, absent: absent
+  };
+}
+
 viewBtn.addEventListener("click", function () {
-  if (saveDataBox.classList.contains("hidden")) {
-    renderSummary();
-    saveDataBox.classList.remove("hidden");
-  } else {
-    saveDataBox.classList.add("hidden");
-  }
+  window.bsOpenAttendanceView(buildAttendanceSnapshot());
 });
 // Clear All -> selected date + mode (Offline ya Online) ki attendance hatao.
 // Event name (agar diya hai) bacha rehta hai.

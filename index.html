@@ -252,7 +252,15 @@ document.documentElement.dataset.theme=__t;
           </div>
         </aside>
       </div>
-
+      <div id="viewAttendanceSummary" hidden>
+  <section class="av">
+    <button type="button" class="av-back" id="avBack">&larr; Back</button>
+    <h2 class="av-title" id="avTitle">Attendance</h2>
+    <div class="av-meta"><span class="av-chip" id="avMode" hidden></span><span id="avDate"></span></div>
+    <div id="avTable"></div>
+    <button type="button" class="av-dl" id="avDownload">&#11015; Download as image</button>
+  </section>
+</div>
       <div id="viewEvents" hidden>
         <section class="events">
           <h2 class="sec-title">Add Event</h2>
@@ -299,6 +307,7 @@ document.documentElement.dataset.theme=__t;
     navigator.serviceWorker.register("sw.js");
   }
 </script>
+<script src="attendance-view.js"></script>
 <script type="module" src="brushstroke.js"></script>
 <script type="module" src="app-shell.js"></script><!-- NAYA: brushstroke.js ke baad -->
 </body>

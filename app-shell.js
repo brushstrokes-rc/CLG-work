@@ -11,14 +11,34 @@ const appShell = document.getElementById("appShell");
 const navLinks = document.querySelectorAll("#appNav a");
 
 // ---------- Pages (Home / Attendance / Events) ----------
+
 function showApp(view, clicked) {
-  ["Home", "Attendance", "Events"].forEach(function (v) {
-    document.getElementById("view" + v).hidden = (v.toLowerCase() !== view);
+  const pages = {
+    home: "viewHome",
+    attendance: "viewAttendance",
+    attendancesummary: "viewAttendanceSummary",
+    events: "viewEvents"
+  };
+
+  Object.entries(pages).forEach(function ([key, id]) {
+    const page = document.getElementById(id);
+    if (page) page.hidden = key !== view;
   });
-  const active = clicked || document.querySelector('#appNav a[data-view="' + view + '"]');
-  navLinks.forEach(function (a) { a.classList.toggle("active", a === active); });
+
+  const active = clicked ||
+    document.querySelector('#appNav a[data-view="' + view + '"]');
+
+  navLinks.forEach(function (a) {
+    a.classList.toggle("active", a === active);
+  });
+
   window.scrollTo(0, 0);
 }
+
+window.bsShowApp = function (view) {
+  showApp(view);
+};
+
 navLinks.forEach(function (a) {
   a.addEventListener("click", function (e) {
     e.preventDefault();

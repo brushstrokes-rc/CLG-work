@@ -244,6 +244,7 @@ loginForm.addEventListener("submit", async function (e) {
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
   try {
+    authHandled = true;   // onAuthStateChanged dobara fire na kare
     await signInWithEmailAndPassword(auth, toEmail(username), password);
     message.textContent = "Login successful!";
     message.className = "success";
@@ -408,7 +409,7 @@ function renderSummary() {
 
 // Marks se Present / Half present / Absent lists banao
 // (jis student pe koi click nahi hua wo Absent me jata hai)
-function snapshotFor(title, dateText, fileDate, mode, marks) {
+function snapshotFor(title, dateText, fileDate, mode, marks, firestoreId) {
   const present = [];
   const half = [];
   const absent = [];
@@ -426,7 +427,8 @@ function snapshotFor(title, dateText, fileDate, mode, marks) {
     mode: modeLabel(mode),
     present: present,
     half: half,
-    absent: absent
+    absent: absent,
+    _firestoreId: firestoreId || null
   };
 }
 
@@ -587,7 +589,7 @@ function eventMatches(s, q) {
 
 // Event ka page kholo (View Attendance jaisa, Present / Half present / Absent table)
 function openEvent(s) {
-  openAttendancePage(snapshotFor(s.title, isoToDisplay(s.date), s.date, s.mode, s.marks));
+  openAttendancePage(snapshotFor(s.title, isoToDisplay(s.date), s.date, s.mode, s.marks, s.id));
 }
 
 function renderEventsPanel() {
@@ -772,12 +774,15 @@ signupForm.addEventListener("submit", async function (e) {
 });
 
 // Decide which screen to show first when page loads
-// (pehle jaisa: hamesha login ya signup dikhao, app direct nahi kholna)
+// Agar user pehle se logged in hai (reload pe) to seedha app kholo
+let authHandled = false;
 onAuthStateChanged(auth, function (user) {
+  if (authHandled) return;   // login/signup form se already handle ho gaya
+  authHandled = true;
   if (user) {
-    signupSection.classList.add("hidden");
-    loginSection.classList.remove("hidden");
+    // Reload pe user already logged in hai — seedha app kholo
     startAttendanceListener();
+    window.dispatchEvent(new Event("bs:enter"));
   } else {
     signupSection.classList.remove("hidden");
     loginSection.classList.add("hidden");

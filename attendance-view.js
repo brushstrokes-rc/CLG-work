@@ -155,18 +155,18 @@
 
   // Delete button click handler
   function handleDelete() {
+    if (!cur) return;
     showDeletePopup(async function () {
-      if (!cur || !cur._firestoreId) {
-        alert("This attendance record cannot be deleted from here. Use the Events panel on the Attendance page.");
-        window.bsShowApp("attendance");
+      if (!cur._firestoreId) {
+        // Draft attendance (unsaved event) — sirf Clear All se clear hoti hai
+        alert("Yeh ek unsaved draft hai. Attendance clear karne ke liye 'Clear All' use karo.");
         return;
       }
-      // brushstroke.js expose karta hai window.bsDeleteAttendanceDoc
       if (typeof window.bsDeleteAttendanceDoc === "function") {
         await window.bsDeleteAttendanceDoc(cur._firestoreId);
         window.bsShowApp("attendance");
       } else {
-        alert("Delete function not available.");
+        alert("Delete function not available. Page reload karo.");
       }
     });
   }

@@ -6,9 +6,7 @@ import {
   getFirestore, doc, getDoc, collection,
   addDoc, onSnapshot, deleteDoc, serverTimestamp, query, orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import {
-  getStorage, ref, uploadBytes, getDownloadURL, deleteObject
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
 
 const auth = getAuth(getApp());
 const db   = getFirestore(getApp());

@@ -244,8 +244,8 @@ loginForm.addEventListener("submit", async function (e) {
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
   try {
-    authHandled = true;   // onAuthStateChanged dobara fire na kare
     await signInWithEmailAndPassword(auth, toEmail(username), password);
+    appLaunched = true;   // onAuthStateChanged dobara fire na kare
     message.textContent = "Login successful!";
     message.className = "success";
     loginSection.classList.add("hidden");
@@ -774,16 +774,24 @@ signupForm.addEventListener("submit", async function (e) {
 });
 
 // Decide which screen to show first when page loads
-// Agar user pehle se logged in hai (reload pe) to seedha app kholo
-let authHandled = false;
+// Flow:
+//   New user      → signup page
+//   Existing user (fresh open/reopen) → login page
+//   Already logged in (reload/reopen with active session) → seedha app
+let appLaunched = false;   // sirf ek baar app launch ho
+
 onAuthStateChanged(auth, function (user) {
-  if (authHandled) return;   // login/signup form se already handle ho gaya
-  authHandled = true;
+  if (appLaunched) return;  // app already launch ho chuka hai, dobara mat chedo
+
   if (user) {
-    // Reload pe user already logged in hai — seedha app kholo
+    // Session active hai (reload ya reopen) — seedha app kholo, login nahi
+    appLaunched = true;
+    signupSection.classList.add("hidden");
+    loginSection.classList.add("hidden");
     startAttendanceListener();
     window.dispatchEvent(new Event("bs:enter"));
   } else {
+    // Koi session nahi — pehle signup dikhao (naya user), login tab dikhao jab signup ho jaaye
     signupSection.classList.remove("hidden");
     loginSection.classList.add("hidden");
   }

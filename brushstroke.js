@@ -931,3 +931,18 @@ initSearchBar();
 
 // NOTE: Home page / navbar / profile card ka saara code app-shell.js me hai.
 // (pehle yahan enterApp / loadProfile / showApp the — wo hata diye, kyunki app-shell.js unhe handle karta hai)
+
+// ---- attendance-view.js ke liye: delete attendance doc globally expose karo ----
+window.bsDeleteAttendanceDoc = async function (docId) {
+  if (!docId) return;
+  // pehle memory se hatao
+  delete rawDocs[docId];
+  buildSessions();
+  renderAll();
+  // phir Firestore se
+  try {
+    await deleteDoc(doc(db, "attendance", docId));
+  } catch (err) {
+    console.error("Attendance delete failed:", err);
+  }
+};

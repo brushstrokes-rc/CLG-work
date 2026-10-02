@@ -245,12 +245,12 @@ loginForm.addEventListener("submit", async function (e) {
   const password = document.getElementById("password").value;
   try {
     await signInWithEmailAndPassword(auth, toEmail(username), password);
-    appLaunched = true;   // onAuthStateChanged dobara fire na kare
+    appLaunched = true;
+    try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
     message.textContent = "Login successful!";
     message.className = "success";
     loginSection.classList.add("hidden");
     startAttendanceListener();
-    // app-shell.js ye event sunke Home page (header + navbar) khol deta hai
     window.dispatchEvent(new Event("bs:enter"));
   } catch (err) {
     message.textContent = "Invalid username or password.";
@@ -618,10 +618,17 @@ function renderEventsPanel() {
   }
 
   list.forEach(function (s) {
+    const wrap = document.createElement("div");
+    wrap.className = "at-ev-wrap";
+    wrap.style.display = "flex";
+    wrap.style.alignItems = "center";
+    wrap.style.gap = "6px";
+
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "at-ev";
     btn.style.setProperty("--h", hueOf[s.id]);
+    btn.style.flex = "1";
 
     const main = document.createElement("span");
     main.className = "at-ev-main";
@@ -641,7 +648,24 @@ function renderEventsPanel() {
     btn.appendChild(main);
     btn.appendChild(date);
     btn.addEventListener("click", function () { openEvent(s); });
-    atList.appendChild(btn);
+
+    // Delete button
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.title = "Delete this event";
+    delBtn.innerHTML = "🗑";
+    delBtn.style.cssText = [
+      "flex-shrink:0;background:#c0392b;color:#fff;border:none",
+      "border-radius:8px;padding:6px 10px;font-size:15px;cursor:pointer"
+    ].join(";");
+    delBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      showAtDeletePopup(s);
+    });
+
+    wrap.appendChild(btn);
+    wrap.appendChild(delBtn);
+    atList.appendChild(wrap);
   });
 }
 
@@ -768,32 +792,40 @@ signupForm.addEventListener("submit", async function (e) {
 
   signupMessage.textContent = "Account created!";
   signupMessage.className = "success";
+  try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
 
   signupSection.classList.add("hidden");
   loginSection.classList.remove("hidden");
 });
 
-// Decide which screen to show first when page loads
+// Page load pe dono hide rakho — Firebase respond karne tak kuch mat dikhao
+signupSection.classList.add("hidden");
+loginSection.classList.add("hidden");
+
 // Flow:
-//   New user      → signup page
-//   Existing user (fresh open/reopen) → login page
-//   Already logged in (reload/reopen with active session) → seedha app
-let appLaunched = false;   // sirf ek baar app launch ho
+//   Active session (reload/reopen)  → seedha app kholo
+//   No session + pehle account tha  → login page
+//   No session + naya device        → signup page
+let appLaunched = false;
 
 onAuthStateChanged(auth, function (user) {
-  if (appLaunched) return;  // app already launch ho chuka hai, dobara mat chedo
+  if (appLaunched) return;
 
   if (user) {
-    // Session active hai (reload ya reopen) — seedha app kholo, login nahi
+    // Session active — seedha app
     appLaunched = true;
-    signupSection.classList.add("hidden");
-    loginSection.classList.add("hidden");
+    try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
     startAttendanceListener();
     window.dispatchEvent(new Event("bs:enter"));
   } else {
-    // Koi session nahi — pehle signup dikhao (naya user), login tab dikhao jab signup ho jaaye
-    signupSection.classList.remove("hidden");
-    loginSection.classList.add("hidden");
+    // Session nahi
+    var hadAccount = false;
+    try { hadAccount = !!localStorage.getItem("bs-had-account"); } catch(e) {}
+    if (hadAccount) {
+      loginSection.classList.remove("hidden");
+    } else {
+      signupSection.classList.remove("hidden");
+    }
   }
 });
 // ---------- Splash screen ----------
@@ -948,11 +980,9 @@ initSearchBar();
 // ---- attendance-view.js ke liye: delete attendance doc globally expose karo ----
 window.bsDeleteAttendanceDoc = async function (docId) {
   if (!docId) return;
-  // pehle memory se hatao
   delete rawDocs[docId];
   buildSessions();
   renderAll();
-  // phir Firestore se
   try {
     await deleteDoc(doc(db, "attendance", docId));
   } catch (err) {

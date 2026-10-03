@@ -992,7 +992,7 @@ window.bsDeleteAttendanceDoc = async function (docId) {
   }
 };
 // ============ AI CHATBOT ============
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=TUMHARI_API_KEY";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AQ.Ab8RN6IqzaaM52NQUmLTDKX31kJweTUb-lAl0UtXVISJLQaFPg";
 
 window.toggleChat = function () {
   const box = document.getElementById("chatBox");

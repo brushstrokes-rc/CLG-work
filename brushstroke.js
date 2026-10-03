@@ -3,6 +3,8 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, on
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, deleteField }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAI, getGenerativeModel, GoogleAIBackend }
+  from "https://www.gstatic.com/firebasejs/11.6.0/firebase-ai.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDXdAA-gK43ZC6BlspWYrB9_Yk3nO0tLnY",
@@ -993,12 +995,7 @@ window.bsDeleteAttendanceDoc = async function (docId) {
   }
 };
 // ============ FIREBASE AI CHATBOT ============
-// Yeh line brushstroke.js ke top pe 3 existing imports ke SAATH nahi — 
-// neeche chatbot section mein jo maine likhi hai woh 10.12.0 pe kaam nahi karegi.
-// Isliye is import mein version 11.0.0 rakho:
-import { getAI, getGenerativeModel, GoogleAIBackend }
-  from "https://www.gstatic.com/firebasejs/11.0.0/firebase-ai.js";
-  
+
 const ai = getAI(app, { backend: new GoogleAIBackend() });
 const chatModel = getGenerativeModel(ai, { model: "gemini-2.0-flash" });
 

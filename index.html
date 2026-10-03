@@ -25,6 +25,7 @@ document.documentElement.dataset.theme=__t;
 
 <link rel="stylesheet" href="brushstroke.css">
 <link rel="stylesheet" href="app-shell.css"><!-- NAYA: brushstroke.css ke baad -->
+<link rel="stylesheet" href="student-profile.css"><!-- NAYA: student profile pages -->
 </head>
 
 <body>
@@ -247,6 +248,61 @@ document.documentElement.dataset.theme=__t;
     <button type="button" class="av-dl" id="avDownload">&#11015; Download as image</button>
   </section>
 </div>
+      <!-- STUDENT PROFILE: naam par click -> pie chart + Present / Half / Absent boxes -->
+      <div id="viewStudentProfile" hidden>
+        <section class="sp">
+          <button type="button" class="av-back" id="spBack">&larr; Back</button>
+          <div class="sp-head">
+            <span class="sp-avatar" id="spAvatar" aria-hidden="true"></span>
+            <div>
+              <h2 class="sp-name" id="spName">Student</h2>
+              <p class="sp-sub" id="spSub"></p>
+            </div>
+          </div>
+          <div class="sp-card">
+            <div class="sp-chart" id="spChart"></div>
+            <ul class="sp-legend" aria-hidden="true">
+              <li><i style="background:#7bfc03"></i>Present</li>
+              <li><i style="background:#00aeff"></i>Half Present</li>
+              <li><i style="background:#fc0303"></i>Absent</li>
+            </ul>
+            <p class="sp-note" id="spNote"></p>
+          </div>
+          <div class="sp-boxes" id="spBoxes">
+            <button type="button" class="sp-box sp-present" data-status="present">
+              <span class="sp-box-label">Present</span><span class="sp-box-count">–</span><span class="sp-box-pct"></span><span class="sp-box-go">View dates &rsaquo;</span>
+            </button>
+            <button type="button" class="sp-box sp-half" data-status="half">
+              <span class="sp-box-label">Half Present</span><span class="sp-box-count">–</span><span class="sp-box-pct"></span><span class="sp-box-go">View dates &rsaquo;</span>
+            </button>
+            <button type="button" class="sp-box sp-absent" data-status="absent">
+              <span class="sp-box-label">Absent</span><span class="sp-box-count">–</span><span class="sp-box-pct"></span><span class="sp-box-go">View dates &rsaquo;</span>
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <!-- STUDENT RECORDS: ek status ki saari dates + events, search ke saath -->
+      <div id="viewStudentRecords" hidden>
+        <section class="sp">
+          <button type="button" class="av-back" id="srBack">&larr; Back</button>
+          <h2 class="sp-name" id="srName" style="margin-top:18px">Student</h2>
+          <span class="sr-pill" id="srPill">Present</span>
+          <div class="sr-search">
+            <div class="sr-field">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+              <input type="text" id="srSearch" placeholder="Search by date or event name..." autocomplete="off"
+                     role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="srSuggest">
+              <button type="button" class="sr-clear" id="srClear" aria-label="Clear search" hidden>&#10005;</button>
+            </div>
+            <div class="sr-suggest" id="srSuggest" role="listbox" hidden></div>
+          </div>
+          <p class="sr-count" id="srCount"></p>
+          <div id="srList"></div>
+          <div class="sr-empty" id="srEmpty" hidden></div>
+        </section>
+      </div>
+
       <div id="viewEvents" hidden>
         <section class="events">
           <h2 class="sec-title">Add Event</h2>
@@ -321,6 +377,7 @@ document.documentElement.dataset.theme=__t;
 </script>
 <script type="module" src="brushstroke.js"></script>
 <script type="module" src="app-shell.js"></script>
+<script type="module" src="student-profile.js"></script><!-- NAYA: app-shell.js ke baad -->
 <script src="attendance-view.js"></script><!-- NAYA: brushstroke.js ke baad -->
 </body>
 </html>

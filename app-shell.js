@@ -1,11 +1,11 @@
 // app-shell.js — login ke baad Home, navbar pages, profile card, events
 // brushstroke.js ke BAAD load hota hai (wahi Firebase app use karta hai)
-import { getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, collection,
   addDoc, onSnapshot, deleteDoc, serverTimestamp, query, orderBy
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
 
 const auth = getAuth(getApp());

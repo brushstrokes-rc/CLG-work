@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, deleteField }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -15,6 +15,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Session hamesha save rahe — reload/reopen pe data gayab na ho
+setPersistence(auth, browserLocalPersistence).catch(function(e){ console.error("Persistence error:", e); });
 const toEmail = u => `${u.trim().toLowerCase().replace(/\s+/g, "")}@brushstrokes.app`;
 // ---------- Account storage (one account per device) ----------
 
@@ -245,6 +248,8 @@ loginForm.addEventListener("submit", async function (e) {
   const password = document.getElementById("password").value;
   try {
     await signInWithEmailAndPassword(auth, toEmail(username), password);
+    appLaunched = true;
+    try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
     message.textContent = "Login successful!";
     message.className = "success";
     loginSection.classList.add("hidden");
@@ -788,28 +793,42 @@ signupForm.addEventListener("submit", async function (e) {
     });
   } catch (err) { console.error("Profile save failed:", err); }
 
-  signupMessage.textContent = "Account created! Ab login karo.";
+  signupMessage.textContent = "Account created!";
   signupMessage.className = "success";
+  try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
+
   signupSection.classList.add("hidden");
   loginSection.classList.remove("hidden");
 });
 
-// Page load pe hamesha login dikhao
-// Reload/reopen pe agar session active hai to seedha app
+// Page load pe dono hide rakho — Firebase respond karne tak kuch mat dikhao
 signupSection.classList.add("hidden");
 loginSection.classList.add("hidden");
 
+// Flow:
+//   Active session (reload/reopen)  → seedha app kholo
+//   No session + pehle account tha  → login page
+//   No session + naya device        → signup page
+let appLaunched = false;
+
 onAuthStateChanged(auth, function (user) {
+  if (appLaunched) return;
+
   if (user) {
-    // Session active (reload/reopen) — seedha app
-    signupSection.classList.add("hidden");
-    loginSection.classList.add("hidden");
+    // Session active — seedha app
+    appLaunched = true;
+    try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
     startAttendanceListener();
     window.dispatchEvent(new Event("bs:enter"));
   } else {
-    // Session nahi — login page
-    signupSection.classList.add("hidden");
-    loginSection.classList.remove("hidden");
+    // Session nahi
+    var hadAccount = false;
+    try { hadAccount = !!localStorage.getItem("bs-had-account"); } catch(e) {}
+    if (hadAccount) {
+      loginSection.classList.remove("hidden");
+    } else {
+      signupSection.classList.remove("hidden");
+    }
   }
 });
 // ---------- Splash screen ----------

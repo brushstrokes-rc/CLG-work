@@ -3,8 +3,6 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, on
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, deleteField }
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
-import { getAI, getGenerativeModel, GoogleAIBackend }
-  from "https://esm.sh/@firebase/ai@2.16.0";
 const firebaseConfig = {
   apiKey: "AIzaSyDXdAA-gK43ZC6BlspWYrB9_Yk3nO0tLnY",
   authDomain: "brushstrokes-cc86c.firebaseapp.com",
@@ -993,77 +991,67 @@ window.bsDeleteAttendanceDoc = async function (docId) {
     console.error("Attendance delete failed:", err);
   }
 };
-// ============ FIREBASE AI CHATBOT ============
+// ============ AI CHATBOT ============
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=TUMHARI_API_KEY";
 
-const ai = getAI(app, { backend: new GoogleAIBackend() });
-const chatModel = getGenerativeModel(ai, { model: "gemini-2.0-flash" });
-
-// Chat toggle
 window.toggleChat = function () {
   const box = document.getElementById("chatBox");
-  const btn = document.getElementById("chatBtn");
-  const open = box.style.display === "flex";
-  box.style.display = open ? "none" : "flex";
-  if (!open) document.getElementById("chatInput").focus();
+  const isOpen = box.style.display === "flex";
+  box.style.display = isOpen ? "none" : "flex";
+  if (!isOpen) document.getElementById("chatInput").focus();
 };
 
-// Chat bubble banana
 function addBubble(text, sender, thinking) {
   const div = document.createElement("div");
   div.textContent = text;
   if (thinking) div.classList.add("thinking");
   Object.assign(div.style, {
-    padding: "8px 12px",
-    borderRadius: "12px",
-    maxWidth: "85%",
+    padding: "8px 12px", borderRadius: "12px", maxWidth: "85%",
     background: sender === "user" ? "#800020" : "#f0f0f0",
     color: sender === "user" ? "white" : "#222",
     alignSelf: sender === "user" ? "flex-end" : "flex-start",
-    lineHeight: "1.45",
-    fontSize: "13px"
+    lineHeight: "1.45", fontSize: "13px"
   });
   const msgs = document.getElementById("chatMessages");
   msgs.appendChild(div);
   msgs.scrollTop = 9999;
 }
 
-// Message send karna
 window.sendMessage = async function () {
   const input = document.getElementById("chatInput");
   const msg = input.value.trim();
   if (!msg) return;
-
   addBubble(msg, "user");
   input.value = "";
   addBubble("Soch raha hoon...", "bot", true);
-
   try {
-    const result = await chatModel.generateContent(
-      `Tum Brushstrokes Society (Ramanujan College, University of Delhi) ke friendly AI assistant ho.
-Art, events, attendance, society info, aur college ke baare mein help karo. Hindi ya English dono mein jawab do.
-User ka sawaal: ${msg}`
-    );
+    const res = await fetch(GEMINI_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text:
+          `Tum Brushstrokes Society (Ramanujan College, Delhi) ke AI assistant ho.
+Art, events, attendance aur society ke baare mein help karo. Hindi/English dono chalega.
+User: ${msg}` }] }]
+      })
+    });
+    const data = await res.json();
     document.querySelector(".thinking")?.remove();
-    addBubble(result.response.text(), "bot");
+    addBubble(data.candidates[0].content.parts[0].text, "bot");
   } catch (err) {
     document.querySelector(".thinking")?.remove();
-    addBubble("Error aa gaya, dobara try karo. 🙏", "bot");
-    console.error("AI error:", err);
+    addBubble("Error aa gaya, dobara try karo 🙏", "bot");
   }
 };
 
-// Enter key support
 document.addEventListener("keydown", function (e) {
   if (e.key === "Enter" && document.activeElement?.id === "chatInput") {
     window.sendMessage();
   }
 });
 
-// Login ke baad chat button dikhao
 window.addEventListener("bs:enter", function () {
   const btn = document.getElementById("chatBtn");
   if (btn) btn.style.display = "flex";
-  btn.style.alignItems = "center";
-  btn.style.justifyContent = "center";
 });
-// ============ /FIREBASE AI CHATBOT ============
+// ============ /AI CHATBOT ============

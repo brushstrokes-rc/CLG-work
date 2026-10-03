@@ -18,7 +18,7 @@ const db = getFirestore(app);
 // Page load/reload/reopen pe hamesha session clear karo — login page dikhao
 //signOut(auth).catch(function(){});
 // Yeh line HATAO:
-signOut(auth).catch(function(){});
+//signOut(auth).catch(function(){});
 
 // Aur LOGIN form submit pe signOut ki jagah — page reload pe logout ho:
 window.addEventListener("beforeunload", function() {

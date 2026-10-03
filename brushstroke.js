@@ -16,7 +16,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // Page load/reload/reopen pe hamesha session clear karo — login page dikhao
-signOut(auth).catch(function(){});
+//signOut(auth).catch(function(){});
 const toEmail = u => `${u.trim().toLowerCase().replace(/\s+/g, "")}@brushstrokes.app`;
 // ---------- Account storage (one account per device) ----------
 

@@ -245,7 +245,7 @@ loginForm.addEventListener("submit", async function (e) {
   const password = document.getElementById("password").value;
   try {
     await signInWithEmailAndPassword(auth, toEmail(username), password);
-    appLaunched = true;
+
     try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
     message.textContent = "Login successful!";
     message.className = "success";
@@ -803,22 +803,22 @@ signupSection.classList.add("hidden");
 loginSection.classList.add("hidden");
 
 // Flow:
-//   Active session (reload/reopen)  → seedha app kholo
-//   No session + pehle account tha  → login page
-//   No session + naya device        → signup page
+//   Active session (reload/tab reopen)  → seedha app
+//   No session + pehle account tha      → login page
+//   No session + naya device            → signup page
 let appLaunched = false;
 
 onAuthStateChanged(auth, function (user) {
-  if (appLaunched) return;
+  if (appLaunched) return;  // login form se already handle ho gaya
+  appLaunched = true;
 
   if (user) {
-    // Session active — seedha app
-    appLaunched = true;
+    // Session active — seedha app kholo
     try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
     startAttendanceListener();
     window.dispatchEvent(new Event("bs:enter"));
   } else {
-    // Session nahi
+    // Session nahi — login ya signup dikhao
     var hadAccount = false;
     try { hadAccount = !!localStorage.getItem("bs-had-account"); } catch(e) {}
     if (hadAccount) {

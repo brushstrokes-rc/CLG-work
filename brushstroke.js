@@ -4,7 +4,7 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, on
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, deleteField }
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import { getAI, getGenerativeModel, GoogleAIBackend }
-  from "https://www.gstatic.com/firebasejs/11.6.0/firebase-ai.js";
+  from "https://esm.sh/@firebase/ai@2.16.0";
 const firebaseConfig = {
   apiKey: "AIzaSyDXdAA-gK43ZC6BlspWYrB9_Yk3nO0tLnY",
   authDomain: "brushstrokes-cc86c.firebaseapp.com",

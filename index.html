@@ -293,6 +293,20 @@ document.documentElement.dataset.theme=__t;
     navigator.serviceWorker.register("sw.js");
   }
 </script>
+<!-- Existing Firebase SDKs ke saath yeh bhi add karo -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-ai.js";
+
+  const firebaseConfig = { /* tumhara existing config */ };
+  const app = initializeApp(firebaseConfig);
+
+  // AI Logic - no API key in code!
+  const ai = getAI(app, { backend: new GoogleAIBackend() });
+  const model = getGenerativeModel(ai, { model: "gemini-2.0-flash" });
+
+  window.brushstrokesAI = model; // global access ke liye
+</script>
 <script type="module" src="brushstroke.js"></script>
 <script type="module" src="app-shell.js"></script>
 <script src="attendance-view.js"></script><!-- NAYA: brushstroke.js ke baad -->

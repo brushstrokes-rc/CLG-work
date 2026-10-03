@@ -992,3 +992,25 @@ window.bsDeleteAttendanceDoc = async function (docId) {
     console.error("Attendance delete failed:", err);
   }
 };
+async function sendMessage() {
+  const input = document.getElementById("chatInput");
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  addBubble(msg, "user");
+  input.value = "";
+  addBubble("Soch raha hoon...", "bot", true);
+
+  try {
+    const result = await window.brushstrokesAI.generateContent(
+      `Tum Brushstrokes Society (Ramanujan College, Delhi) ke assistant ho. 
+       Art events, attendance, society info ke baare mein help karo.
+       User ka sawaal: ${msg}`
+    );
+    document.querySelector(".thinking")?.remove();
+    addBubble(result.response.text(), "bot");
+  } catch (err) {
+    document.querySelector(".thinking")?.remove();
+    addBubble("Error aa gaya, dobara try karo.", "bot");
+  }
+}

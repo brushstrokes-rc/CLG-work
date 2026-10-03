@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence }
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, deleteField }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -16,8 +16,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Tab band hone pe session khatam — reload/reopen pe hamesha login
-setPersistence(auth, browserSessionPersistence).catch(e => console.error(e));
+// Page load/reload/reopen pe hamesha session clear karo — login page dikhao
+signOut(auth).catch(function(){});
 const toEmail = u => `${u.trim().toLowerCase().replace(/\s+/g, "")}@brushstrokes.app`;
 // ---------- Account storage (one account per device) ----------
 

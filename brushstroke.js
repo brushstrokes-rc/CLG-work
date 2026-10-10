@@ -996,12 +996,13 @@ initSearchBar();
 var SHEETS_URL = "https://script.google.com/macros/s/AKfycbyISnoSu8t4ESuLdamI8HkvXw7PuoDCZipUtA96XSsNn5Bc1VadVKfgQkiLt7Q7lsa-QA/exec";
 var SHEETS_KEY = "brushstrokes2024secret";
 function backupToSheet(sheetName, row) {
-  fetch(SHEETS_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ key: SHEETS_KEY, sheetName: sheetName, row: row })
-  }).catch(function(e) { console.log("Sheet backup failed:", e); });
+  var params = "?key=" + encodeURIComponent(SHEETS_KEY)
+    + "&sheet=" + encodeURIComponent(sheetName)
+    + "&row=" + encodeURIComponent(JSON.stringify(row));
+  fetch(SHEETS_URL + params)
+    .then(function(r){ return r.text(); })
+    .then(function(t){ console.log("Sheet backup:", t); })
+    .catch(function(e){ console.log("Sheet backup failed:", e); });
 }
 
 // NOTE: Home page / navbar / profile card ka saara code app-shell.js me hai.

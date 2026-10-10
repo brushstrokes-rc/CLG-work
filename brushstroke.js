@@ -1,8 +1,8 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, deleteField }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDXdAA-gK43ZC6BlspWYrB9_Yk3nO0tLnY",
@@ -553,23 +553,6 @@ saveTitleBtn.addEventListener("click", async function () {
   try {
     await setDoc(doc(db, "attendance", id), data);
     if (draftId) await deleteDoc(doc(db, "attendance", draftId));
-    // Google Sheets backup
-    var bMarks = data.marks || {};
-    var bPresent = [], bHalf = [], bAbsent = [];
-    students.forEach(function(s) {
-      if (bMarks[s] === "present") bPresent.push(s);
-      else if (bMarks[s] === "half") bHalf.push(s);
-      else bAbsent.push(s);
-    });
-    backupToSheet("Attendance", [
-      new Date().toLocaleString("en-IN"),
-      data.date || "",
-      data.title || "Attendance",
-      data.mode || "",
-      bPresent.join(", "),
-      bHalf.join(", "),
-      bAbsent.join(", ")
-    ]);
   } catch (err) {
     console.error("Event save failed:", err);
     setNote("Couldn't save the event. Try again.", true);
@@ -993,17 +976,6 @@ initSearchBar();
 
 // NOTE: Home page / navbar / profile card ka saara code app-shell.js me hai.
 // (pehle yahan enterApp / loadProfile / showApp the — wo hata diye, kyunki app-shell.js unhe handle karta hai)
-// ===== Google Sheets Backup =====
-var SHEETS_URL = "https://script.google.com/macros/s/AKfycbyISnoSu8t4ESuLdamI8HkvXw7PuoDCZipUtA96XSsNn5Bc1VadVKfgQkiLt7Q7lsa-QA/exec";
-var SHEETS_KEY = "brushstrokes2024secret";
-
-function backupToSheet(sheetName, row) {
-  fetch(SHEETS_URL, {
-    method: "POST",
-    body: JSON.stringify({ key: SHEETS_KEY, sheetName: sheetName, row: row })
-  }).catch(function(e) { console.log("Sheet backup failed:", e); });
-}
-
 
 // ---- attendance-view.js ke liye: delete attendance doc globally expose karo ----
 window.bsDeleteAttendanceDoc = async function (docId) {

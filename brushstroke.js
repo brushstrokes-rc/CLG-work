@@ -554,7 +554,7 @@ saveTitleBtn.addEventListener("click", async function () {
     await setDoc(doc(db, "attendance", id), data);
     if (draftId) await deleteDoc(doc(db, "attendance", draftId));
     // Google Sheets backup
-    var bMarks = data.marks || {};
+    var bMarks = data || {};
     var bPresent = [], bHalf = [], bAbsent = [];
     students.forEach(function(s) {
       if (bMarks[s] === "present") bPresent.push(s);
@@ -563,9 +563,8 @@ saveTitleBtn.addEventListener("click", async function () {
     });
     backupToSheet("Attendance", [
       new Date().toLocaleString("en-IN"),
-      data.date || "",
-      data.title || "Attendance",
-      data.mode || "",
+      data._title || "Attendance",
+      id,
       bPresent.join(", "),
       bHalf.join(", "),
       bAbsent.join(", ")
@@ -896,6 +895,56 @@ let studentList = []; // global array
 
 // App load hote hi students fetch karo
 // ---------- Search Bar ----------
+// ---- Attendance event delete popup ----
+function showAtDeletePopup(s) {
+  var old = document.getElementById("atDelPopup");
+  if (old) old.remove();
+
+  var overlay = document.createElement("div");
+  overlay.id = "atDelPopup";
+  overlay.style.cssText = "position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px";
+
+  var box = document.createElement("div");
+  box.style.cssText = "background:#fff;color:#222;border-radius:16px;padding:28px 24px 22px;max-width:360px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.25);text-align:center";
+
+  var msg = document.createElement("p");
+  msg.style.cssText = "font-size:16px;font-weight:600;margin:0 0 6px";
+  msg.textContent = "Are you sure you want to delete this event attendance?";
+
+  var name = document.createElement("p");
+  name.style.cssText = "font-size:14px;color:#666;margin:0 0 22px;font-style:italic";
+  name.textContent = "\"" + (s.title || s.id) + "\"";
+
+  var btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex;gap:12px;justify-content:center";
+
+  var noBtn = document.createElement("button");
+  noBtn.textContent = "No";
+  noBtn.style.cssText = "flex:1;max-width:120px;padding:11px 0;border:none;border-radius:10px;background:#002aff;color:#fff;font-size:15px;font-weight:700;cursor:pointer";
+  noBtn.addEventListener("click", function() { overlay.remove(); });
+
+  var yesBtn = document.createElement("button");
+  yesBtn.textContent = "Yes";
+  yesBtn.style.cssText = "flex:1;max-width:120px;padding:11px 0;border:none;border-radius:10px;background:#00ff77;color:#111;font-size:15px;font-weight:700;cursor:pointer";
+  yesBtn.addEventListener("click", async function() {
+    overlay.remove();
+    delete rawDocs[s.id];
+    buildSessions();
+    renderAll();
+    try { await deleteDoc(doc(db, "attendance", s.id)); }
+    catch(e) { console.error("Delete failed:", e); }
+  });
+
+  btnRow.appendChild(noBtn);
+  btnRow.appendChild(yesBtn);
+  box.appendChild(msg);
+  box.appendChild(name);
+  box.appendChild(btnRow);
+  overlay.appendChild(box);
+  overlay.addEventListener("click", function(e) { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
 function initSearchBar() {
   const searchInput = document.getElementById('studentSearch');
   const suggestionsBox = document.getElementById('searchSuggestions');
@@ -991,20 +1040,6 @@ function scrollToStudent(name) {
 // Init call
 initSearchBar();
 
-
-// ===== Google Sheets Backup =====
-var SHEETS_URL = "https://script.google.com/macros/s/AKfycbyISnoSu8t4ESuLdamI8HkvXw7PuoDCZipUtA96XSsNn5Bc1VadVKfgQkiLt7Q7lsa-QA/exec";
-var SHEETS_KEY = "brushstrokes2024secret";
-function backupToSheet(sheetName, row) {
-  var params = "?key=" + encodeURIComponent(SHEETS_KEY)
-    + "&sheet=" + encodeURIComponent(sheetName)
-    + "&row=" + encodeURIComponent(JSON.stringify(row));
-  fetch(SHEETS_URL + params)
-    .then(function(r){ return r.text(); })
-    .then(function(t){ console.log("Sheet backup:", t); })
-    .catch(function(e){ console.log("Sheet backup failed:", e); });
-}
-
 // NOTE: Home page / navbar / profile card ka saara code app-shell.js me hai.
 // (pehle yahan enterApp / loadProfile / showApp the — wo hata diye, kyunki app-shell.js unhe handle karta hai)
 
@@ -1020,3 +1055,15 @@ window.bsDeleteAttendanceDoc = async function (docId) {
     console.error("Attendance delete failed:", err);
   }
 };
+// ===== Google Sheets Backup =====
+var SHEETS_URL = "https://script.google.com/macros/s/AKfycbyISnoSu8t4ESuLdamI8HkvXw7PuoDCZipUtA96XSsNn5Bc1VadVKfgQkiLt7Q7lsa-QA/exec";
+var SHEETS_KEY = "brushstrokes2024secret";
+function backupToSheet(sheetName, row) {
+  var params = "?key=" + encodeURIComponent(SHEETS_KEY)
+    + "&sheet=" + encodeURIComponent(sheetName)
+    + "&row=" + encodeURIComponent(JSON.stringify(row));
+  fetch(SHEETS_URL + params)
+    .then(function(r){ return r.text(); })
+    .then(function(t){ console.log("Sheet backup:", t); })
+    .catch(function(e){ console.log("Sheet backup failed:", e); });
+}

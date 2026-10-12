@@ -26,6 +26,8 @@ document.documentElement.dataset.theme=__t;
 <link rel="stylesheet" href="brushstroke.css">
 <link rel="stylesheet" href="app-shell.css"><!-- NAYA: brushstroke.css ke baad -->
 <link rel="stylesheet" href="student-profile.css"><!-- NAYA: student profile pages -->
+<link rel="stylesheet" href="Core members view.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 
 <body>
@@ -105,7 +107,7 @@ document.documentElement.dataset.theme=__t;
       <a href="#home" data-view="home" class="active">Home</a>
       <a href="#attendance" data-view="attendance">Attendance</a>
       <a href="#events" data-view="events">Events</a>
-      <a href="#core-members" data-view="home">Core Members</a>
+      <a href="#core-members" data-view="coremembers">Core Members</a>
       <a href="#info" data-view="home">Info</a>
       <a href="#announcements" data-view="home">Announcements</a>
     </nav>
@@ -138,7 +140,7 @@ document.documentElement.dataset.theme=__t;
             </div>
           </section>
         </section>
-      
+      <div id="core-members-view" style="display:none;" hidden></div>
         <section class="hero">
           <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div><div class="blob b5"></div>
           <h1>Every stroke tells a story</h1>
@@ -171,7 +173,7 @@ document.documentElement.dataset.theme=__t;
             <div class="brand">Brushstrokes</div>
             <div></div>
           </div>
-
+      <div id="core-members-view" style="display:none;"></div>
           <!-- Date picker: shows dd/mm/yy, click opens native calendar. Pencil = event name -->
           <div class="date-row date-row-flex">
             <button id="dateBtn" type="button" class="date-box">01/01/26</button>
@@ -379,5 +381,6 @@ document.documentElement.dataset.theme=__t;
 <script type="module" src="app-shell.js"></script>
 <script type="module" src="student-profile.js"></script><!-- NAYA: app-shell.js ke baad -->
 <script src="attendance-view.js"></script><!-- NAYA: brushstroke.js ke baad -->
+<script src="Core members view.js"></script>
 </body>
 </html>

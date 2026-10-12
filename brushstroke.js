@@ -1067,3 +1067,27 @@ function backupToSheet(sheetName, row) {
     .then(function(t){ console.log("Sheet backup:", t); })
     .catch(function(e){ console.log("Sheet backup failed:", e); });
 }
+function initCoreMembers() {
+  // Attendance section band karo
+  const attendanceSection = document.getElementById("attendanceSection");
+  if (attendanceSection) attendanceSection.classList.add("hidden");}
+  
+  // ... baaki existing code same rahega
+// ---- Core Members navbar wiring ----
+window.addEventListener("bs:enter", function () {
+  // app-shell.js ka navbar already handle karta hai,
+  // bas Core Members ke liye extra listener chahiye
+  const cmNavBtn = document.getElementById("coreNavBtn");
+  // ↑ ye id app-shell.js me jo bhi Core Members navbar button ki hai wahi dalo
+  if (cmNavBtn) {
+    cmNavBtn.addEventListener("click", function () {
+      // baaki sections hide karo — ye function app-shell.js me hoga
+      if (typeof window.bsHideAll === "function") window.bsHideAll();
+      const cmDiv = document.getElementById("core-members-view");
+      if (cmDiv) {
+        cmDiv.style.display = "block";
+        initCoreMembers();
+      }
+    });
+  }
+});

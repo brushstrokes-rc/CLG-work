@@ -12,7 +12,10 @@ const urlsToCache = [
   "student-profile.js",
   "student-profile.css",
   "manifest.json",
-  "brushstroke.icon.jpeg"
+  "brushstroke.icon.jpeg",
+  "Core members view.css",
+  'Core members view.js',
+// aur CACHE_NAME version badlo, e.g. v15 -> v16
 ];
 
 // Install: files cache mein daalo

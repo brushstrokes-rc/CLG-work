@@ -1,8 +1,9 @@
 // ── core-members-view.js ──
-// Self-contained: injects its own HTML into a container div.
-// Requires: `db` (Firebase Firestore) in global scope from brushstroke.js
-// CSS: core-members-view.css (linked in index.html <head>)
-// Google Sheets: set CM_SHEETS_URL below after deploying Apps Script
+import { getApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { getFirestore, doc, setDoc, collection, getDocs }
+  from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
+const db = getFirestore(getApp());
 
 const CM_SHEETS_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
 

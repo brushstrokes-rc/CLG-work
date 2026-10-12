@@ -1,6 +1,6 @@
 // ── core-members-view.js ──
 import { getApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-import { getFirestore, doc, setDoc, collection, getDocs }
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs }
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
 const db = getFirestore(getApp());
@@ -221,13 +221,13 @@ function cmSelectDate(dk) {
 // ── FIRESTORE ─────────────────────────────────────────────────────────────────
 async function cmLoadAllSessions() {
   try {
-    const snap = await db.collection("core-attendance").get();
+    const snap = await getDocs(collection(db, "core-attendance"));
     cmAllSessions = [];
     cmGreenDates = new Set();
-    snap.forEach(doc => {
-      const d = doc.data();
-      cmGreenDates.add(doc.id);
-      cmAllSessions.push({ dateKey: doc.id, title: d.title || "", mode: d.mode || "online" });
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      cmGreenDates.add(docSnap.id);
+      cmAllSessions.push({ dateKey: docSnap.id, title: d.title || "", mode: d.mode || "online" });
     });
     cmAllSessions.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
     cmBuildCalendar();
@@ -237,10 +237,10 @@ async function cmLoadAllSessions() {
 
 async function cmLoadDateData(dk) {
   try {
-    const doc = await db.collection("core-attendance").doc(dk).get();
+    const docSnap = await getDoc(doc(db, "core-attendance", dk));
     CM_MEMBERS.forEach(m => cmState[m.name] = null);
-    if (doc.exists) {
-      const d = doc.data();
+    if (docSnap.exists()) {
+      const d = docSnap.data();
       cmMode = d.mode || "online";
       document.getElementById("cmEventInput").value = d.title || "";
       document.getElementById("cmOnlineBtn").classList.toggle("active", cmMode === "online");
@@ -260,7 +260,7 @@ async function cmSaveData() {
   const payload = { date: dk, title, mode: cmMode, members, savedAt: new Date().toISOString() };
 
   try {
-    await db.collection("core-attendance").doc(dk).set(payload);
+    await setDoc(doc(db, "core-attendance", dk), payload);
     cmGreenDates.add(dk);
     cmSelectedDate = dk;
     cmBuildCalendar();

@@ -5,7 +5,7 @@ import { getFirestore, doc, setDoc, getDoc, collection, getDocs }
 
 const db = getFirestore(getApp());
 
-const CM_SHEETS_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+const CM_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyISnoSu8t4ESuLdamI8HkvXw7PuoDCZipUtA96XSsNn5Bc1VadVKfgQkiLt7Q7lsa-QA/exec";
 
 const CM_MEMBERS = [
   { name: "Saurabh Bhandari",  color: "#d4edda", dark: "#4a7c59" },

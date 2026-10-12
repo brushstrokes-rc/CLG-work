@@ -138,7 +138,7 @@ function initCoreMembers() {
   // Find or create the container div that brushstroke.js uses for page content
   // Change "core-members-view" to whatever id your app uses for the content area
   let container = document.getElementById("core-members-view");
-  if (!container) return;
+  if (!container) { console.error('Core Members: id="core-members-view" index.html me nahi mila'); return; }
 
   // Only inject HTML once
   if (!container.dataset.cmReady) {
@@ -248,6 +248,8 @@ async function cmLoadDateData(dk) {
       (d.members || []).forEach(m => {
         if (m.name in cmState) cmState[m.name] = m.status;
       });
+    } else {
+      document.getElementById("cmEventInput").value = "";   // nayi date: purani date ka title na bache
     }
     cmRenderMembers(document.getElementById("cmSearchBar").value);
   } catch (e) { console.error("CM load date:", e); }

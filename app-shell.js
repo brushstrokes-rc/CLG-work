@@ -23,23 +23,26 @@ function showApp(view, clicked) {
     events: "viewEvents",
     coremembers: "core-members-view"
   };
+
   Object.entries(pages).forEach(function ([key, id]) {
     const page = document.getElementById(id);
-    if (page) page.hidden = key !== view;
-  });
-  // ← ye block add karo
-  if (view === "coremembers") {
-    const cmDiv = document.getElementById("core-members-view");
-    if (cmDiv) {
-      cmDiv.hidden = false;
-      cmDiv.style.display = "block";
+    if (!page) return;
+    if (key === "coremembers") {
+      // Core Members: display se control karo
+      page.hidden = false;
+      page.style.display = key === view ? "block" : "none";
+    } else {
+      page.hidden = key !== view;
+      page.style.display = "";
     }
-    if (typeof initCoreMembers === "function") initCoreMembers();
-    // attendance section band karo
+  });
+
+  if (view === "coremembers") {
     const attSec = document.getElementById("attendanceSection");
     if (attSec) attSec.classList.add("hidden");
+    if (typeof initCoreMembers === "function") initCoreMembers();
   }
-  // ← block end
+
   const active = clicked || document.querySelector('#appNav a[data-view="' + view + '"]');
   navLinks.forEach(function (a) { a.classList.toggle("active", a === active); });
   window.scrollTo(0, 0);

@@ -1,4 +1,4 @@
-const CACHE_NAME = "brushstrokes-cache-v25.7.5";
+const CACHE_NAME = "brushstrokes-cache-v25.8";
 
 // Saari files jo offline chahiye
 const urlsToCache = [

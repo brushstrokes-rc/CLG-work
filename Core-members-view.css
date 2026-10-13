@@ -15,9 +15,18 @@
 .cm-title-heading {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #6b1a2b;
   letter-spacing: 0.5px;
   margin-bottom: 10px;
+  background: linear-gradient(90deg, #ff0000, #ff7700, #ffdd00, #00cc00, #0099ff, #7700ff, #ff00aa, #ff0000);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: cmRainbow 3s linear infinite;
+}
+@keyframes cmRainbow {
+  0%   { background-position: 0% center; }
+  100% { background-position: 200% center; }
 }
 
 /* ── Calendar ── */
@@ -104,13 +113,16 @@
   border: 2px solid #6b1a2b;
   border-radius: 6px;
   background: #fff;
-  color: #6b1a2b;
+  color: #333;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.18s;
 }
-.cm-mode-btn.active { background: #6b1a2b; color: #fff; }
+#cmOnlineBtn.active  { background: #d2ff80; color: #1a3a00; border-color: #8ab800; }
+#cmOfflineBtn.active { background: #b380ff; color: #1a0040; border-color: #7700cc; }
+#cmOnlineBtn:not(.active):hover  { background: #eeffcc; }
+#cmOfflineBtn:not(.active):hover { background: #ead5ff; }
 
 .cm-event-row {
   display: flex;
@@ -134,15 +146,21 @@
 .cm-att-toggle-btn {
   display: inline-block;
   padding: 7px 26px;
-  background: #6b1a2b;
-  color: #fff;
+  background: #2afa00;
+  color: #0a2a00;
   border: none;
   border-radius: 20px;
   font-size: 0.88rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   margin-bottom: 12px;
   letter-spacing: 0.4px;
+  box-shadow: 0 2px 8px rgba(42,250,0,0.25);
+  transition: background 0.18s, box-shadow 0.18s;
+}
+.cm-att-toggle-btn:hover {
+  background: #1dd400;
+  box-shadow: 0 3px 12px rgba(42,250,0,0.4);
 }
 
 /* ── Main body: two columns ── */
@@ -309,7 +327,8 @@
   cursor: pointer;
   transition: all 0.18s;
 }
-.cm-bottom-btn:hover { background: #6b1a2b; color: #fff; }
+.cm-bottom-btn:nth-child(1):hover { background: #f7747f; color: #fff; border-color: #f7747f; }
+.cm-bottom-btn:nth-child(2):hover { background: #fad682; color: #3a2a00; border-color: #e0aa00; }
 
 /* ── View Attendance Page ── */
 #cm-view-page {

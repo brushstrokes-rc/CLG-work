@@ -118,6 +118,7 @@ let sessions = {};           // drafts: "yyyy-mm-dd|offline" -> { id, date, mode
 let eventDocs = [];          // Save se bane events: { id, date, mode, title, marks, createdAt }
 let currentMode = "offline"; // left wale Offline / Online button se badalta hai
 let unsubscribeAttendance = null;
+let editing = null;          // Edit mode ka working copy: { id, date, mode, title, createdAt, orig, marks } (null = normal mode)
 
 function sessionKey(dateStr, mode) { return dateStr + "|" + mode; }
 function modeLabel(mode) { return mode === "online" ? "Online" : "Offline"; }
@@ -163,6 +164,14 @@ function docIdFor(dateStr, mode) {
 
 function currentSession() {
   return sessions[sessionKey(toISO(selectedDate), currentMode)];
+}
+
+// Table jis session ko dikha raha hai: Edit mode me event ka working copy, warna draft
+function activeSession() {
+  if (editing) {
+    return { id: editing.id, date: editing.date, mode: editing.mode, title: editing.title, marks: editing.marks, createdAt: editing.createdAt };
+  }
+  return currentSession();
 }
 
 function startAttendanceListener() {
@@ -266,6 +275,7 @@ dateBtn.textContent = toDisplay(selectedDate);
 
 // Clicking the visible button opens the native calendar on the hidden input
 dateBtn.addEventListener("click", function () {
+  if (editing) return;   // edit ke dauran date locked
   if (typeof dateInput.showPicker === "function") {
     dateInput.showPicker();
   } else {
@@ -276,6 +286,7 @@ dateBtn.addEventListener("click", function () {
 
 // When a date is picked from the calendar, switch the table to that date
 dateInput.addEventListener("change", function () {
+  if (editing) { dateInput.value = toISO(selectedDate); return; }
   if (!dateInput.value) return;
 
   const parts = dateInput.value.split("-"); // [yyyy, mm, dd]
@@ -330,6 +341,14 @@ attendanceBody.addEventListener("click", async function (e) {
   else if (target.classList.contains("half-cell")) { name = target.dataset.student; status = "half"; }
   if (!name) return;
 
+  // Edit mode: sirf working copy badlo (Firestore Update dabane par hi badlega, drafts ko haath nahi lagta)
+  if (editing) {
+    if (editing.marks[name] === status) delete editing.marks[name];
+    else editing.marks[name] = status;
+    renderAll();
+    return;
+  }
+
   const dateStr = toISO(selectedDate);
   const id = docIdFor(dateStr, currentMode);
   const sess = currentSession();
@@ -357,7 +376,7 @@ attendanceBody.addEventListener("click", async function (e) {
 
 // Ek student ki row ka color (green / blue) selected date + mode ke hisaab se
 function markRow(name) {
-  const s = currentSession();
+  const s = activeSession();
   const status = s ? s.marks[name] : undefined;
 
   const presentCell = attendanceBody.querySelector('.present-cell[data-student="' + name + '"]');
@@ -388,7 +407,7 @@ function renderAll() {
 
 // View Attendance: selected date + mode ki present / half present list
 function renderSummary() {
-  const sess = currentSession();
+  const sess = activeSession();
   const marks = sess ? sess.marks : {};
 
   const present = [];
@@ -442,11 +461,16 @@ function openAttendancePage(data) {
 
 // Left card ki abhi ki (unsaved) attendance
 function buildAttendanceSnapshot() {
-  const sess = currentSession();
+  const sess = activeSession();
+  // Edit mode me abhi ka (unsaved) copy + event ka id dikhao, taaki Edit wapas isi edit par laaye
+  const title = editing
+    ? (titleIn.value.trim() || editing.title || "Attendance")
+    : (sess && sess.title ? sess.title : "Attendance");
   return snapshotFor(
-    sess && sess.title ? sess.title : "Attendance",
+    title,
     toDisplay(selectedDate), toISO(selectedDate), currentMode,
-    sess ? sess.marks : {}
+    sess ? sess.marks : {},
+    editing ? editing.id : null
   );
 }
 
@@ -457,6 +481,8 @@ viewBtn.addEventListener("click", function () {
 // Clear All -> selected date + mode (Offline ya Online) ki attendance hatao.
 // Event name (agar diya hai) bacha rehta hai.
 clearAllBtn.addEventListener("click", async function () {
+  // Edit mode: sirf working copy khaali karo (Cancel se wapas aa jata hai)
+  if (editing) { editing.marks = {}; renderAll(); return; }
   const sess = currentSession();
   if (!sess) return;
   const id = sess.id;
@@ -496,12 +522,14 @@ function updateModeButtons() {
 // Event name wala box us date + mode ke title se bhar do
 // (force=false: agar user abhi type kar raha hai to uska text na badlo)
 function syncTitleInput(force) {
+  if (editing) return;   // edit ke dauran naam box user ke control me hai
   if (!force && document.activeElement === titleIn) return;
   const sess = currentSession();
   titleIn.value = sess ? sess.title : "";
 }
 
 function setMode(mode) {
+  if (editing) return;   // edit ke dauran mode locked
   currentMode = mode;
   updateModeButtons();
   syncTitleInput(true);
@@ -515,6 +543,7 @@ modeOnBtn.addEventListener("click", function () { setMode("online"); });
 
 // ---------- Event name (pencil + Save) ----------
 editTitleBtn.addEventListener("click", function () {
+  if (editing) return;   // edit me naam + Update wali row khuli rehti hai
   titleRow.classList.toggle("hidden");
   if (!titleRow.classList.contains("hidden")) titleIn.focus();
 });
@@ -527,6 +556,7 @@ titleIn.addEventListener("keydown", function (e) {
 // Save -> table ki abhi ki attendance se EK NAYA event banta hai (Events list me judta hai),
 // phir table khaali ho jati hai taaki agla event nayi attendance se shuru ho.
 saveTitleBtn.addEventListener("click", async function () {
+  if (editing) { await updateEditedEvent(); return; }
   const value = titleIn.value.trim();
   if (!value) { setNote("Enter an event name first.", true); return; }
 
@@ -574,6 +604,173 @@ saveTitleBtn.addEventListener("click", async function () {
     setNote("Couldn't save the event. Try again.", true);
   }
 });
+
+// ---------- Edit a saved event ----------
+// Edit dabane par event ka COPY table me khulta hai (naam + saari Present/Half/Absent marks).
+// Table me tap karne par sirf copy badalti hai. Update dabane par wahi ORIGINAL Firestore doc
+// (same id) merge se update hota hai: _createdAt aur baaki fields bache rehte hain, aur drafts
+// ko haath nahi lagta. Cancel = copy phenk do, Firestore ko kuch nahi hota.
+const editBanner = document.createElement("div");
+editBanner.className = "edit-banner";
+editBanner.hidden = true;
+const editBannerText = document.createElement("span");
+const editCancelBtn = document.createElement("button");
+editCancelBtn.type = "button";
+editCancelBtn.className = "edit-cancel";
+editCancelBtn.textContent = "Cancel";
+editBanner.appendChild(editBannerText);
+editBanner.appendChild(editCancelBtn);
+(function () {
+  const head = dashboardSection.querySelector(".mode-head");
+  if (head && head.parentNode) head.parentNode.insertBefore(editBanner, head.nextSibling);
+  else dashboardSection.insertBefore(editBanner, dashboardSection.firstChild);
+})();
+
+function findSessionById(id) {
+  for (let i = 0; i < eventDocs.length; i++) if (eventDocs[i].id === id) return eventDocs[i];
+  const keys = Object.keys(sessions);
+  for (let j = 0; j < keys.length; j++) if (sessions[keys[j]].id === id) return sessions[keys[j]];
+  return null;
+}
+
+function sameMarks(a, b) {
+  const ka = Object.keys(a), kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every(function (k) { return b[k] === a[k]; });
+}
+
+function isEditDirty() {
+  return !!editing && (!sameMarks(editing.marks, editing.orig) || titleIn.value.trim() !== editing.title);
+}
+
+// Edit mode ke hisaab se banner, Save/Update label aur date/mode lock set karo
+function applyEditUI() {
+  const on = !!editing;
+  editBanner.hidden = !on;
+  if (on) editBannerText.textContent = "Editing: " + editing.title + " (" + isoToDisplay(editing.date) + ", " + modeLabel(editing.mode) + ")";
+  dateBtn.disabled = on;
+  modeOffBtn.disabled = on;
+  modeOnBtn.disabled = on;
+  saveTitleBtn.textContent = on ? "Update" : "Save";
+}
+
+function startEdit(id) {
+  const s = findSessionById(id);
+  if (!s) { alert("This event could not be found. It may have been deleted."); return; }
+
+  editing = {
+    id: s.id, date: s.date, mode: s.mode, title: s.title || "", createdAt: s.createdAt,
+    orig: Object.assign({}, s.marks),     // original marks (sirf diff ke liye)
+    marks: Object.assign({}, s.marks)     // working copy
+  };
+
+  const p = s.date.split("-");
+  selectedDate = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  currentMode = s.mode;
+  dateInput.value = toISO(selectedDate);
+  dateBtn.textContent = toDisplay(selectedDate);
+  updateModeButtons();
+
+  titleRow.classList.remove("hidden");
+  titleIn.value = editing.title;
+  applyEditUI();
+  setNote("Change the statuses or the name, then press Update.");
+  attendanceSection.classList.remove("hidden");
+  refreshTableForDate();
+  window.bsShowApp("attendance");
+}
+
+function cancelEdit() {
+  editing = null;
+  applyEditUI();
+  syncTitleInput(true);
+  setNote(HINT);
+  refreshTableForDate();
+}
+
+async function updateEditedEvent() {
+  if (!editing) return;
+  const ed = editing;
+  const value = titleIn.value.trim();
+  if (!value) { setNote("Enter an event name first.", true); return; }
+
+  // ORIGINAL doc me merge: marks + naam likho, hataye gaye marks deleteField se hatao.
+  // _createdAt (aur koi bhi aur field) ko haath nahi lagta.
+  const payload = {};
+  Object.keys(ed.marks).forEach(function (n) { payload[n] = ed.marks[n]; });
+  Object.keys(ed.orig).forEach(function (n) { if (!(n in ed.marks)) payload[n] = deleteField(); });
+  payload._title = value;
+
+  saveTitleBtn.disabled = true;
+  try {
+    await setDoc(doc(db, "attendance", ed.id), payload, { merge: true });
+  } catch (err) {
+    console.error("Event update failed:", err);
+    setNote("Couldn't update the event. Try again.", true);
+    saveTitleBtn.disabled = false;
+    return;
+  }
+  saveTitleBtn.disabled = false;
+
+  // screen par turant dikhao
+  const raw = rawDocs[ed.id] || (rawDocs[ed.id] = {});
+  Object.keys(ed.orig).forEach(function (n) { if (!(n in ed.marks)) delete raw[n]; });
+  Object.keys(ed.marks).forEach(function (n) { raw[n] = ed.marks[n]; });
+  raw._title = value;
+
+  editing = null;
+  applyEditUI();
+  buildSessions();
+  syncTitleInput(true);
+  renderAll();
+  setNote("Event updated.");
+
+  // Google Sheets backup: nayi row, "(edited)" ke saath, same document id
+  const bPresent = [], bHalf = [], bAbsent = [];
+  students.forEach(function (n) {
+    if (ed.marks[n] === "present") bPresent.push(n);
+    else if (ed.marks[n] === "half") bHalf.push(n);
+    else bAbsent.push(n);
+  });
+  backupToSheet("Attendance", [
+    new Date().toLocaleString("en-IN"),
+    value + " (edited)",
+    ed.id,
+    bPresent.join(", "),
+    bHalf.join(", "),
+    bAbsent.join(", ")
+  ]);
+}
+
+editCancelBtn.addEventListener("click", function () {
+  if (isEditDirty() && !confirm("Discard your changes to this event?")) return;
+  cancelEdit();
+});
+
+// attendance-view.js ka Edit button isse bulata hai (d = View Attendance page ka data)
+window.bsEditAttendance = function (d) {
+  if (!d) return;
+  if (d._firestoreId) {
+    // isi event ka edit pehle se chal raha hai -> bas table par wapas
+    if (editing && editing.id === d._firestoreId) { window.bsShowApp("attendance"); return; }
+    if (editing && isEditDirty() && !confirm("Discard unsaved changes to the event you were editing?")) return;
+    startEdit(d._firestoreId);
+    return;
+  }
+  // Left card ki unsaved (draft) attendance: us date + mode ke saath table par wapas
+  if (!editing && /^\d{4}-\d{2}-\d{2}$/.test(d.fileDate || "")) {
+    const p = d.fileDate.split("-");
+    selectedDate = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    currentMode = /^on/i.test(d.mode || "") ? "online" : "offline";
+    dateInput.value = toISO(selectedDate);
+    dateBtn.textContent = toDisplay(selectedDate);
+    updateModeButtons();
+    syncTitleInput(true);
+    refreshTableForDate();
+  }
+  attendanceSection.classList.remove("hidden");
+  window.bsShowApp("attendance");
+};
 
 // ---------- Events panel (right side) ----------
 function isoToDisplay(iso) {
@@ -928,6 +1125,7 @@ function showAtDeletePopup(s) {
   yesBtn.style.cssText = "flex:1;max-width:120px;padding:11px 0;border:none;border-radius:10px;background:#00ff77;color:#111;font-size:15px;font-weight:700;cursor:pointer";
   yesBtn.addEventListener("click", async function() {
     overlay.remove();
+    if (editing && editing.id === s.id) { editing = null; applyEditUI(); setNote(HINT); }
     delete rawDocs[s.id];
     buildSessions();
     renderAll();

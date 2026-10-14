@@ -318,17 +318,18 @@
 }
 .cm-bottom-btn {
   padding: 9px 30px;
-  border: 2px solid #6b1a2b;
+  border: 2px solid transparent;
   border-radius: 6px;
-  background: #fff;
-  color: #6b1a2b;
+  color: #fff;
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.18s;
 }
-.cm-bottom-btn:nth-child(1):hover { background: #f7747f; color: #fff; border-color: #f7747f; }
-.cm-bottom-btn:nth-child(2):hover { background: #fad682; color: #3a2a00; border-color: #e0aa00; }
+.cm-bottom-btn:nth-child(1) { background: #1d6fd8; }   /* save title -> blue */
+.cm-bottom-btn:nth-child(1):hover { background: #1558ab; }
+.cm-bottom-btn:nth-child(2) { background: #8e44ad; }   /* view attendance -> violet */
+.cm-bottom-btn:nth-child(2):hover { background: #7a3a96; }
 
 /* ── View Attendance Page ── */
 #cm-view-page {
@@ -337,20 +338,45 @@
   background: #f5f0eb;
   min-height: calc(100vh - 120px);
 }
+/* Back (yellow) left, Edit (peach) right */
+.cm-view-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  max-width: 700px;
+  margin: 0 auto 14px;
+}
 .cm-view-back {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: none;
+  background: #fae100;
   border: none;
-  color: #6b1a2b;
+  border-radius: 10px;
+  color: #1f1b00;
   font-weight: 700;
   font-size: 0.88rem;
   cursor: pointer;
-  margin-bottom: 14px;
-  padding: 4px 0;
+  padding: 9px 18px;
+  transition: background 0.18s;
 }
-.cm-view-back:hover { text-decoration: underline; }
+.cm-view-back:hover { background: #e6ce00; }
+.cm-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffbe98;
+  border: none;
+  border-radius: 10px;
+  color: #5a2a10;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  padding: 9px 18px;
+  transition: background 0.18s;
+}
+.cm-edit-btn:hover { background: #ffab7a; }
 .cm-view-meta {
   text-align: center;
   margin-bottom: 14px;
@@ -410,8 +436,8 @@
   display: block;
   margin: 0 auto;
   padding: 9px 36px;
-  background: #6b1a2b;
-  color: #fff;
+  background: #00faab;
+  color: #04342c;
   border: none;
   border-radius: 8px;
   font-size: 0.9rem;
@@ -419,7 +445,7 @@
   cursor: pointer;
   transition: background 0.18s;
 }
-.cm-download-btn:hover { background: #8a2239; }
+.cm-download-btn:hover { background: #00e39b; }
 
 /* ── Responsive ── */
 @media (max-width: 560px) {

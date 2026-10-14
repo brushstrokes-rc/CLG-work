@@ -32,6 +32,7 @@ let cmCalYear, cmCalMonth;
 let cmGreenDates = new Set();
 let cmSelectedDate = null;
 let cmAllSessions = [];
+let cmExtraMembers = [];   // saved doc ke wo members jo CM_MEMBERS me nahi hain: dikhte hain aur re-save par bache rehte hain
 
 // ── HTML INJECTION ────────────────────────────────────────────────────────────
 function cmInjectHTML(container) {
@@ -99,7 +100,10 @@ function cmInjectHTML(container) {
 
     <!-- VIEW / REPORT PAGE -->
     <div id="cm-view-page" style="display:none;">
-      <button class="cm-view-back" onclick="cmBackToMain()">&#8592; Back</button>
+      <div class="cm-view-top">
+        <button class="cm-view-back" onclick="cmBackToMain()">&#8592; Back</button>
+        <button class="cm-edit-btn" onclick="cmEditAttendance()">&#9998; Edit</button>
+      </div>
 
       <div id="cmViewCard">
         <div class="cm-view-meta">
@@ -150,6 +154,7 @@ function initCoreMembers() {
   cmCalYear = now.getFullYear();
   cmCalMonth = now.getMonth();
   CM_MEMBERS.forEach(m => cmState[m.name] = null);
+  cmExtraMembers = [];
   cmMode = "online";
   cmAttPanelVisible = true;
 
@@ -236,6 +241,7 @@ async function cmLoadAllSessions() {
 }
 
 async function cmLoadDateData(dk) {
+  cmExtraMembers = [];   // pichli date ke extra members kabhi nayi date me na jayein
   try {
     const docSnap = await getDoc(doc(db, "core-attendance", dk));
     CM_MEMBERS.forEach(m => cmState[m.name] = null);
@@ -246,23 +252,27 @@ async function cmLoadDateData(dk) {
       document.getElementById("cmOnlineBtn").classList.toggle("active", cmMode === "online");
       document.getElementById("cmOfflineBtn").classList.toggle("active", cmMode === "offline");
       (d.members || []).forEach(m => {
-        if (m.name in cmState) cmState[m.name] = m.status;
+        if (!m || !m.name) return;
+        if (Object.prototype.hasOwnProperty.call(cmState, m.name)) cmState[m.name] = m.status;
+        else cmExtraMembers.push({ name: m.name, status: m.status || "absent" });
       });
     } else {
       document.getElementById("cmEventInput").value = "";   // nayi date: purani date ka title na bache
     }
     cmRenderMembers(document.getElementById("cmSearchBar").value);
-  } catch (e) { console.error("CM load date:", e); }
+    return true;
+  } catch (e) { console.error("CM load date:", e); return false; }
 }
 
 async function cmSaveData() {
   const dk = cmSelectedDate || cmTodayKey();
   const title = document.getElementById("cmEventInput").value.trim();
-  const members = CM_MEMBERS.map(m => ({ name: m.name, status: cmState[m.name] || "absent" }));
+  const members = CM_MEMBERS.map(m => ({ name: m.name, status: cmState[m.name] || "absent" }))
+    .concat(cmExtraMembers.map(m => ({ name: m.name, status: m.status })));
   const payload = { date: dk, title, mode: cmMode, members, savedAt: new Date().toISOString() };
 
   try {
-    await setDoc(doc(db, "core-attendance", dk), payload);
+    await setDoc(doc(db, "core-attendance", dk), payload, { merge: true });   // same date doc update, doosre fields bache rehte hain
     cmGreenDates.add(dk);
     cmSelectedDate = dk;
     cmBuildCalendar();
@@ -348,13 +358,15 @@ function cmRenderSessionList(filter) {
   list.forEach(s => {
     const div = document.createElement("div");
     div.className = "cm-session-item" + (cmSelectedDate === s.dateKey ? " active" : "");
-    div.onclick = () => {
+    div.onclick = async () => {
       cmSelectedDate = s.dateKey;
       const [y, mo] = s.dateKey.split("-").map(Number);
       cmCalYear = y; cmCalMonth = mo - 1;
       cmBuildCalendar();
-      cmLoadDateData(s.dateKey);
       cmRenderSessionList(document.getElementById("cmSessionSearch").value);
+      // saved doc load karke View Attendance format me dikhao (Download as Image neeche), Edit se main screen par
+      if (await cmLoadDateData(s.dateKey)) cmOpenViewPage();
+      else alert("❌ Couldn't load this session. Please try again.");
     };
     div.innerHTML = `${s.title||"(no title)"}<span class="cm-session-date">${s.dateKey} · ${s.mode}</span>`;
     ul.appendChild(div);
@@ -383,6 +395,14 @@ function cmOpenViewPage() {
     else                                     absent.push(m);
   });
 
+  // saved doc ke members jo CM_MEMBERS me nahi hain wo bhi dikhao
+  cmExtraMembers.forEach(m => {
+    const e = { name: m.name, dark: "#999" };
+    if      (m.status === "present") present.push(e);
+    else if (m.status === "half")    half.push(e);
+    else                             absent.push(e);
+  });
+
   const dk    = cmSelectedDate || cmTodayKey();
   const title = (document.getElementById("cmEventInput").value.trim());
 
@@ -395,7 +415,7 @@ function cmOpenViewPage() {
 
   const renderCol = (id, arr) => {
     document.getElementById(id).innerHTML = arr.length
-      ? arr.map(m => `<div class="cm-view-name" style="border-left:3px solid ${m.dark};padding-left:6px">${m.name}</div>`).join("")
+      ? arr.map(m => `<div class="cm-view-name" style="border-left:3px solid ${m.dark};padding-left:6px">${cmEsc(m.name)}</div>`).join("")
       : `<div class="cm-view-name" style="color:#bbb">—</div>`;
   };
   renderCol("cmViewPresent", present);
@@ -409,6 +429,26 @@ function cmOpenViewPage() {
 function cmBackToMain() {
   document.getElementById("cm-view-page").style.display  = "none";
   document.getElementById("cm-main-view").style.display  = "block";
+}
+
+function cmEsc(t) {
+  return String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// Edit: is date ka saved data (naam, mode, saare statuses) main screen par khulta hai.
+// Save dabane par wahi date-doc update hota hai (id = date), duplicate nahi banta.
+function cmEditAttendance() {
+  const dk = cmSelectedDate || cmTodayKey();
+  const [y, mo] = dk.split("-").map(Number);
+  cmCalYear = y; cmCalMonth = mo - 1;
+  cmBuildCalendar();
+  cmRenderMembers(document.getElementById("cmSearchBar").value);
+  cmRenderSessionList(document.getElementById("cmSessionSearch").value);
+  cmAttPanelVisible = true;
+  const body = document.getElementById("cmAttBody");
+  if (body) body.style.display = "flex";
+  cmBackToMain();
+  window.scrollTo(0, 0);
 }
 
 // ── DOWNLOAD ──────────────────────────────────────────────────────────────────
@@ -439,6 +479,7 @@ window.cmClearAll           = cmClearAll;
 window.cmSaveData           = cmSaveData;
 window.cmOpenViewPage       = cmOpenViewPage;
 window.cmBackToMain         = cmBackToMain;
+window.cmEditAttendance     = cmEditAttendance;
 window.cmDownloadAttendance = cmDownloadAttendance;
 window.cmRenderMembers      = cmRenderMembers;
 window.cmRenderSessionList  = cmRenderSessionList;

@@ -119,4 +119,20 @@
 
   $("avBack").addEventListener("click", function () { window.bsShowApp("attendance"); });
   $("avDownload").addEventListener("click", download);
+
+  // Edit button (peach) -- Back ke saamne, right side par. Back ko ek row me rakh kar uske saath Edit jodte hain.
+  var backBtn = $("avBack");
+  var bar = document.createElement("div");
+  bar.className = "av-bar";
+  backBtn.parentNode.insertBefore(bar, backBtn);
+  bar.appendChild(backBtn);
+  var editBtn = document.createElement("button");
+  editBtn.type = "button";
+  editBtn.id = "avEdit";
+  editBtn.className = "av-edit";
+  editBtn.textContent = "\u270E Edit";
+  bar.appendChild(editBtn);
+  editBtn.addEventListener("click", function () {
+    if (cur && typeof window.bsEditAttendance === "function") window.bsEditAttendance(cur);
+  });
 })();

@@ -995,3 +995,73 @@ input[type="password"]::-webkit-contacts-auto-fill-button {
 }
 
 .av-dl:hover { background: #00e39b; }
+
+/* ---------- Edit (peach) button + edit mode ---------- */
+.av-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.av-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: #ffbe98;
+  color: #5a2a10;
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.av-edit:hover { background: #ffab7a; }
+
+.edit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: #fff1e6;
+  border: 1.5px solid #ffbe98;
+  border-radius: 8px;
+  color: #5a2a10;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.edit-banner[hidden] { display: none; }
+
+.edit-cancel {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  background: #fff;
+  color: #5a5a5a;
+  border: 1.5px solid #b9b3a6;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.edit-cancel:hover { background: #f1eee7; }
+
+/* date + mode edit ke dauran locked */
+.date-box:disabled,
+.mode-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* View Attendance button: violet (Save/Update blue, Clear All red se alag) */
+#viewBtn.save-btn { background: #8e44ad; }
+#viewBtn.save-btn:hover { background: #7a3a96; }

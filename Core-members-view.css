@@ -110,19 +110,21 @@
 }
 .cm-mode-btn {
   padding: 6px 20px;
-  border: 2px solid #6b1a2b;
+  border: 2px solid transparent;
   border-radius: 6px;
-  background: #fff;
-  color: #333;
+  color: #2b1a14;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.18s;
 }
-#cmOnlineBtn.active  { background: #d2ff80; color: #1a3a00; border-color: #8ab800; }
-#cmOfflineBtn.active { background: #b380ff; color: #1a0040; border-color: #7700cc; }
-#cmOnlineBtn:not(.active):hover  { background: #eeffcc; }
-#cmOfflineBtn:not(.active):hover { background: #ead5ff; }
+/* palette: sky #3FA7D6, gold #FAC05E. Inactive = halka tint, active = poora rang */
+#cmOnlineBtn  { background: #e1f1f9; border-color: #3FA7D6; }
+#cmOfflineBtn { background: #fef2db; border-color: #FAC05E; }
+#cmOnlineBtn.active  { background: #3FA7D6; border-color: #2b87b3; }
+#cmOfflineBtn.active { background: #FAC05E; border-color: #d99a2b; }
+#cmOnlineBtn:not(.active):hover  { background: #c8e6f4; }
+#cmOfflineBtn:not(.active):hover { background: #fde3b0; }
 
 .cm-event-row {
   display: flex;
@@ -146,8 +148,8 @@
 .cm-att-toggle-btn {
   display: inline-block;
   padding: 7px 26px;
-  background: #2afa00;
-  color: #0a2a00;
+  background: #59CD90;
+  color: #0d3b24;
   border: none;
   border-radius: 20px;
   font-size: 0.88rem;
@@ -155,12 +157,12 @@
   cursor: pointer;
   margin-bottom: 12px;
   letter-spacing: 0.4px;
-  box-shadow: 0 2px 8px rgba(42,250,0,0.25);
+  box-shadow: 0 2px 8px rgba(89,205,144,0.35);
   transition: background 0.18s, box-shadow 0.18s;
 }
 .cm-att-toggle-btn:hover {
-  background: #1dd400;
-  box-shadow: 0 3px 12px rgba(42,250,0,0.4);
+  background: #46b97c;
+  box-shadow: 0 3px 12px rgba(89,205,144,0.5);
 }
 
 /* ── Main body: two columns ── */
@@ -292,21 +294,83 @@
 }
 .cm-sessions-search:focus { border-color: #6b1a2b; }
 .cm-session-item {
-  padding: 7px 10px;
-  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 10px;
+  border-radius: 10px;
   cursor: pointer;
   font-size: 0.8rem;
-  font-weight: 600;
-  color: #333;
-  border: 1.5px solid #e0d5c5;
-  margin-bottom: 5px;
-  background: #faf6f0;
-  transition: background 0.15s;
+  font-weight: 700;
+  color: #fff;
+  background: var(--sc, #6b1a2b);   /* har session ka alag rang JS se aata hai */
+  border: 1.5px solid var(--sc, #6b1a2b);
+  margin-bottom: 7px;
+  transition: filter 0.15s, box-shadow 0.15s;
   line-height: 1.35;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.25);
 }
-.cm-session-item:hover { background: #f0e0e4; border-color: #c2a96e; }
-.cm-session-item.active { background: #6b1a2b; color: #fff; border-color: #6b1a2b; }
-.cm-session-date { font-size: 0.72rem; font-weight: 400; opacity: 0.75; display: block; }
+.cm-session-item:hover { filter: brightness(1.1); }
+.cm-session-item.active { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--sc, #6b1a2b); }
+.cm-session-text { flex: 1; min-width: 0; }
+.cm-session-name { display: block; overflow-wrap: anywhere; }
+.cm-session-date { font-size: 0.72rem; font-weight: 500; opacity: 0.9; display: block; }
+.cm-session-del {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.25);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.cm-session-del:hover { background: rgba(255,255,255,0.5); }
+
+/* ── Delete confirm popup ── */
+.cm-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0,0,0,0.55);
+}
+.cm-confirm-box {
+  width: 100%;
+  max-width: 340px;
+  padding: 22px 20px 18px;
+  border-radius: 14px;
+  background: #fff;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+.cm-confirm-text { margin: 0 0 6px; font-size: 1rem; font-weight: 700; color: #2b2b2b; }
+.cm-confirm-sub { margin: 0 0 16px; font-size: 0.8rem; color: #7a5a4a; overflow-wrap: anywhere; }
+.cm-confirm-btns { display: flex; justify-content: center; gap: 12px; }
+.cm-confirm-yes,
+.cm-confirm-no {
+  flex: 1;
+  max-width: 130px;
+  padding: 10px 0;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.cm-confirm-yes { background: #EE6352; color: #2b1a14; }
+.cm-confirm-no  { background: #59CD90; color: #0d3b24; }
+.cm-confirm-yes:hover,
+.cm-confirm-no:hover { filter: brightness(0.93); }
+.cm-confirm-yes:disabled,
+.cm-confirm-no:disabled { opacity: 0.6; cursor: wait; }
+
 .cm-no-sessions { font-size: 0.78rem; color: #999; text-align: center; margin-top: 10px; }
 
 /* ── Bottom buttons ── */
@@ -320,16 +384,16 @@
   padding: 9px 30px;
   border: 2px solid transparent;
   border-radius: 6px;
-  color: #fff;
+  color: #2b1a14;
   font-size: 0.88rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.18s;
 }
-.cm-bottom-btn:nth-child(1) { background: #1d6fd8; }   /* save title -> blue */
-.cm-bottom-btn:nth-child(1):hover { background: #1558ab; }
-.cm-bottom-btn:nth-child(2) { background: #8e44ad; }   /* view attendance -> violet */
-.cm-bottom-btn:nth-child(2):hover { background: #7a3a96; }
+.cm-bottom-btn:nth-child(1) { background: #EE6352; }   /* save title / update -> coral */
+.cm-bottom-btn:nth-child(1):hover { background: #d9503f; }
+.cm-bottom-btn:nth-child(2) { background: #F79D84; }   /* view attendance -> tangerine */
+.cm-bottom-btn:nth-child(2):hover { background: #e8866b; }
 
 /* ── View Attendance Page ── */
 #cm-view-page {

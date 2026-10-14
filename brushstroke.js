@@ -556,9 +556,10 @@ titleIn.addEventListener("keydown", function (e) {
 // Save -> table ki abhi ki attendance se EK NAYA event banta hai (Events list me judta hai),
 // phir table khaali ho jati hai taaki agla event nayi attendance se shuru ho.
 saveTitleBtn.addEventListener("click", async function () {
+  titleRow.classList.remove("hidden");   // Save ab View Attendance ke upar hai; message dikhane ke liye naam wali row khol do
   if (editing) { await updateEditedEvent(); return; }
   const value = titleIn.value.trim();
-  if (!value) { setNote("Enter an event name first.", true); return; }
+  if (!value) { setNote("Enter an event name first.", true); titleIn.focus(); return; }
 
   const dateStr = toISO(selectedDate);
   const draft = currentSession();

@@ -1,6 +1,6 @@
 // ── core-members-view.js ──
 import { getApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, collection, getDocs }
+import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs }
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
 const db = getFirestore(getApp());
@@ -32,6 +32,9 @@ let cmCalYear, cmCalMonth;
 let cmGreenDates = new Set();
 let cmSelectedDate = null;
 let cmAllSessions = [];
+let cmEditingDate = null;   // Edit mode me jis saved date ko edit kar rahe hain (null = normal)
+let cmColorBook = {};       // dateKey -> session ka rang (is page-load me stable)
+let cmColorNext = 0;        // agla unused rang-index; rang kabhi repeat nahi hote
 let cmExtraMembers = [];   // saved doc ke wo members jo CM_MEMBERS me nahi hain: dikhte hain aur re-save par bache rehte hain
 
 // ── HTML INJECTION ────────────────────────────────────────────────────────────
@@ -92,7 +95,7 @@ function cmInjectHTML(container) {
       </div>
 
       <div class="cm-bottom-btns">
-        <button class="cm-bottom-btn" onclick="cmSaveData()">save title</button>
+        <button class="cm-bottom-btn" id="cmSaveBtn" onclick="cmSaveData()">save title</button>
         <button class="cm-bottom-btn" onclick="cmOpenViewPage()">view attendance</button>
       </div>
 
@@ -155,6 +158,8 @@ function initCoreMembers() {
   cmCalMonth = now.getMonth();
   CM_MEMBERS.forEach(m => cmState[m.name] = null);
   cmExtraMembers = [];
+  cmEditingDate = null;
+  cmApplyEditUI();
   cmMode = "online";
   cmAttPanelVisible = true;
 
@@ -218,6 +223,7 @@ function cmNextMonth() {
   cmBuildCalendar();
 }
 function cmSelectDate(dk) {
+  cmLeaveEditIfOtherDate(dk);
   cmSelectedDate = dk;
   cmBuildCalendar();
   cmLoadDateData(dk);
@@ -235,6 +241,9 @@ async function cmLoadAllSessions() {
       cmAllSessions.push({ dateKey: docSnap.id, title: d.title || "", mode: d.mode || "online" });
     });
     cmAllSessions.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+    // rang purani date se naayi date ke order me baantte hain, taaki naya session aane par purane rang na badlein
+    cmColorBook = {}; cmColorNext = 0;
+    cmAllSessions.slice().reverse().forEach(x => cmColorFor(x.dateKey));
     cmBuildCalendar();
     cmRenderSessionList("");
   } catch (e) { console.error("CM load sessions:", e); }
@@ -281,7 +290,10 @@ async function cmSaveData() {
     else cmAllSessions.unshift({ dateKey: dk, title, mode: cmMode });
     cmRenderSessionList(document.getElementById("cmSessionSearch").value);
     cmPushToSheets(payload);
-    alert("✅ Attendance saved!");
+    const wasEditing = !!cmEditingDate;
+    cmEditingDate = null;
+    cmApplyEditUI();
+    alert(wasEditing ? "✅ Attendance updated!" : "✅ Attendance saved!");
   } catch (e) { console.error("CM save:", e); alert("❌ Save failed: " + e.message); }
 }
 
@@ -358,7 +370,9 @@ function cmRenderSessionList(filter) {
   list.forEach(s => {
     const div = document.createElement("div");
     div.className = "cm-session-item" + (cmSelectedDate === s.dateKey ? " active" : "");
+    div.style.setProperty("--sc", cmColorFor(s.dateKey));   // har session ka apna, alag rang
     div.onclick = async () => {
+      cmLeaveEditIfOtherDate(s.dateKey);
       cmSelectedDate = s.dateKey;
       const [y, mo] = s.dateKey.split("-").map(Number);
       cmCalYear = y; cmCalMonth = mo - 1;
@@ -368,9 +382,135 @@ function cmRenderSessionList(filter) {
       if (await cmLoadDateData(s.dateKey)) cmOpenViewPage();
       else alert("❌ Couldn't load this session. Please try again.");
     };
-    div.innerHTML = `${s.title||"(no title)"}<span class="cm-session-date">${s.dateKey} · ${s.mode}</span>`;
+
+    const text = document.createElement("div");
+    text.className = "cm-session-text";
+    const name = document.createElement("span");
+    name.className = "cm-session-name";
+    name.textContent = s.title || "(no title)";
+    const meta = document.createElement("span");
+    meta.className = "cm-session-date";
+    meta.textContent = `${s.dateKey} · ${s.mode}`;
+    text.appendChild(name);
+    text.appendChild(meta);
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "cm-session-del";
+    del.title = "Delete";
+    del.setAttribute("aria-label", "Delete this title");
+    del.textContent = "🗑️";
+    del.onclick = (e) => { e.stopPropagation(); cmConfirmDelete(s); };
+
+    div.appendChild(text);
+    div.appendChild(del);
     ul.appendChild(div);
   });
+}
+
+// ── SESSION COLORS (har session ka alag, bold rang; kabhi repeat nahi) ───────────
+const CM_SESSION_COLORS = [
+  "#c62828", "#1565c0", "#2e7d32", "#d84315", "#6a1b9a",
+  "#00838f", "#ad1457", "#a67c00", "#283593", "#558b2f", "#6d4c41"
+];
+function cmPaletteColor(i) {
+  if (i < CM_SESSION_COLORS.length) return CM_SESSION_COLORS[i];
+  // uske baad: golden-angle hue, har index ka alag hue (dark rakha hai taaki safed text padhne me aaye)
+  const k = i - CM_SESSION_COLORS.length;
+  const hue = Math.round(((k * 137.508) + 20) % 360 * 10) / 10;
+  const light = [38, 30, 34][Math.floor(k / 12) % 3];
+  return `hsl(${hue}, 72%, ${light}%)`;
+}
+function cmColorFor(dk) {
+  if (!cmColorBook[dk]) cmColorBook[dk] = cmPaletteColor(cmColorNext++);
+  return cmColorBook[dk];
+}
+
+// ── DELETE SESSION ────────────────────────────────────────────────────────────
+function cmConfirmDelete(s) {
+  const old = document.getElementById("cmConfirmOverlay");
+  if (old) old.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "cmConfirmOverlay";
+  overlay.className = "cm-confirm-overlay";
+
+  const box = document.createElement("div");
+  box.className = "cm-confirm-box";
+  box.setAttribute("role", "dialog");
+  box.setAttribute("aria-modal", "true");
+
+  const q = document.createElement("p");
+  q.className = "cm-confirm-text";
+  q.textContent = "Are you sure you want to delete this title?";
+  const sub = document.createElement("p");
+  sub.className = "cm-confirm-sub";
+  sub.textContent = (s.title || "(no title)") + " · " + s.dateKey;
+
+  const btns = document.createElement("div");
+  btns.className = "cm-confirm-btns";
+  const yes = document.createElement("button");
+  yes.type = "button"; yes.className = "cm-confirm-yes"; yes.textContent = "Yes";
+  const no = document.createElement("button");
+  no.type = "button"; no.className = "cm-confirm-no"; no.textContent = "No";
+  btns.appendChild(yes);
+  btns.appendChild(no);
+
+  box.appendChild(q);
+  box.appendChild(sub);
+  box.appendChild(btns);
+  overlay.appendChild(box);
+
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  function close() {
+    document.removeEventListener("keydown", onKey);
+    overlay.remove();
+  }
+  no.onclick = close;                                         // No: kuch delete nahi hota
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
+  yes.onclick = async () => {
+    yes.disabled = true; no.disabled = true;
+    await cmDeleteSession(s);
+    close();
+  };
+  document.addEventListener("keydown", onKey);
+
+  document.body.appendChild(overlay);
+  no.focus();   // galti se Enter dabane par bhi delete na ho
+}
+
+// Is date ka saved session (core-attendance doc, id = date) delete karo
+async function cmDeleteSession(s) {
+  try {
+    await deleteDoc(doc(db, "core-attendance", s.dateKey));
+  } catch (e) {
+    console.error("CM delete:", e);
+    alert("❌ Delete failed: " + e.message);
+    return;
+  }
+  cmAllSessions = cmAllSessions.filter(x => x.dateKey !== s.dateKey);
+  cmGreenDates.delete(s.dateKey);
+  delete cmColorBook[s.dateKey];
+  if (cmEditingDate === s.dateKey) { cmEditingDate = null; cmApplyEditUI(); }
+
+  // agar yehi date main screen par khuli thi to uska data bhi saaf (warna Save se wapas ban jata)
+  if (cmSelectedDate === s.dateKey) {
+    CM_MEMBERS.forEach(m => cmState[m.name] = null);
+    cmExtraMembers = [];
+    document.getElementById("cmEventInput").value = "";
+    cmRenderMembers(document.getElementById("cmSearchBar").value);
+  }
+  cmBuildCalendar();
+  cmRenderSessionList(document.getElementById("cmSessionSearch").value);
+}
+
+// ── EDIT MODE (save title -> update) ──────────────────────────────────────────
+function cmApplyEditUI() {
+  const b = document.getElementById("cmSaveBtn");
+  if (b) b.textContent = cmEditingDate ? "update" : "save title";
+}
+function cmLeaveEditIfOtherDate(dk) {
+  if (cmEditingDate && cmEditingDate !== dk) { cmEditingDate = null; cmApplyEditUI(); }
 }
 
 // ── CONTROLS ──────────────────────────────────────────────────────────────────
@@ -447,6 +587,8 @@ function cmEditAttendance() {
   cmAttPanelVisible = true;
   const body = document.getElementById("cmAttBody");
   if (body) body.style.display = "flex";
+  cmEditingDate = cmGreenDates.has(dk) ? dk : null;   // saved record hi "update" hota hai
+  cmApplyEditUI();
   cmBackToMain();
   window.scrollTo(0, 0);
 }

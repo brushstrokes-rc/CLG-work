@@ -32,6 +32,10 @@ let cmCalYear, cmCalMonth;
 let cmGreenDates = new Set();
 let cmSelectedDate = null;
 let cmAllSessions = [];
+// Har date ke ticks browser me yaad rakhte hain (localStorage), taaki date badalne / refresh par na jayein
+const CM_DRAFT_KEY = "bs-core-ticks-v1";
+let cmDrafts = cmReadDrafts();   // { "yyyy-mm-dd": { state: {name: status|null}, t: ms } }
+let cmLoading = false;           // date load ho rahi hai: us dauran tick ignore (galat date me na likhe)
 let cmEditingDate = null;   // Edit mode me jis saved date ko edit kar rahe hain (null = normal)
 let cmColorBook = {};       // dateKey -> session ka rang (is page-load me stable)
 let cmColorNext = 0;        // agla unused rang-index; rang kabhi repeat nahi hote
@@ -174,6 +178,7 @@ function initCoreMembers() {
 
   cmBuildCalendar();
   cmLoadAllSessions();
+  cmApplyDraft(cmDraftDate());   // refresh / page wapas aane par is date ke ticks wapas
   cmRenderMembers("");
 }
 
@@ -249,8 +254,9 @@ async function cmLoadAllSessions() {
   } catch (e) { console.error("CM load sessions:", e); }
 }
 
-async function cmLoadDateData(dk) {
+async function cmLoadDateData(dk, ignoreDraft) {
   cmExtraMembers = [];   // pichli date ke extra members kabhi nayi date me na jayein
+  cmLoading = true;
   try {
     const docSnap = await getDoc(doc(db, "core-attendance", dk));
     CM_MEMBERS.forEach(m => cmState[m.name] = null);
@@ -268,9 +274,13 @@ async function cmLoadDateData(dk) {
     } else {
       document.getElementById("cmEventInput").value = "";   // nayi date: purani date ka title na bache
     }
+    // is date ke yaad rakhe (unsaved) ticks saved record par bhaari hain.
+    // Saved Sessions ka view (ignoreDraft) hamesha saved record dikhata hai.
+    if (!ignoreDraft) cmApplyDraft(dk);
     cmRenderMembers(document.getElementById("cmSearchBar").value);
     return true;
   } catch (e) { console.error("CM load date:", e); return false; }
+  finally { cmLoading = false; }
 }
 
 async function cmSaveData() {
@@ -283,6 +293,7 @@ async function cmSaveData() {
   try {
     await setDoc(doc(db, "core-attendance", dk), payload, { merge: true });   // same date doc update, doosre fields bache rehte hain
     cmGreenDates.add(dk);
+    cmDraftDelete(dk);   // ab saved record hi latest hai
     cmSelectedDate = dk;
     cmBuildCalendar();
     const ex = cmAllSessions.find(s => s.dateKey === dk);
@@ -344,13 +355,17 @@ function cmRenderMembers(filter) {
 }
 
 function cmTick(name, type) {
+  if (cmLoading) return;
   cmState[name] = cmState[name] === type ? null : type;
+  cmDraftSave(cmDraftDate());
   cmRenderMembers(document.getElementById("cmSearchBar").value);
 }
 
 function cmClearAll() {
+  if (cmLoading) return;
   if (!confirm("Clear all attendance marks?")) return;
   CM_MEMBERS.forEach(m => cmState[m.name] = null);
+  cmDraftSave(cmDraftDate());
   cmRenderMembers(document.getElementById("cmSearchBar").value);
 }
 
@@ -379,7 +394,7 @@ function cmRenderSessionList(filter) {
       cmBuildCalendar();
       cmRenderSessionList(document.getElementById("cmSessionSearch").value);
       // saved doc load karke View Attendance format me dikhao (Download as Image neeche), Edit se main screen par
-      if (await cmLoadDateData(s.dateKey)) cmOpenViewPage();
+      if (await cmLoadDateData(s.dateKey, true)) cmOpenViewPage();
       else alert("❌ Couldn't load this session. Please try again.");
     };
 
@@ -490,6 +505,7 @@ async function cmDeleteSession(s) {
   }
   cmAllSessions = cmAllSessions.filter(x => x.dateKey !== s.dateKey);
   cmGreenDates.delete(s.dateKey);
+  cmDraftDelete(s.dateKey);
   delete cmColorBook[s.dateKey];
   if (cmEditingDate === s.dateKey) { cmEditingDate = null; cmApplyEditUI(); }
 
@@ -502,6 +518,40 @@ async function cmDeleteSession(s) {
   }
   cmBuildCalendar();
   cmRenderSessionList(document.getElementById("cmSessionSearch").value);
+}
+
+// ── PER-DATE TICK DRAFTS ──────────────────────────────────────────────────────
+function cmReadDrafts() {
+  try {
+    const raw = localStorage.getItem(CM_DRAFT_KEY);
+    const o = raw ? JSON.parse(raw) : {};
+    return (o && typeof o === "object") ? o : {};
+  } catch (e) { return {}; }
+}
+function cmWriteDrafts() {
+  try { localStorage.setItem(CM_DRAFT_KEY, JSON.stringify(cmDrafts)); }
+  catch (e) { console.warn("CM drafts save failed:", e); }
+}
+function cmDraftDate() { return cmSelectedDate || cmTodayKey(); }
+
+// Abhi ki ticks is date ke naam se yaad rakho (poora snapshot: tick hata diya = null bhi yaad rehta hai)
+function cmDraftSave(dk) {
+  const state = {};
+  CM_MEMBERS.forEach(m => { state[m.name] = cmState[m.name] || null; });
+  const empty = CM_MEMBERS.every(m => !state[m.name]);
+  if (empty && !cmGreenDates.has(dk)) delete cmDrafts[dk];   // koi tick nahi + saved session bhi nahi: yaad rakhne ko kuch nahi
+  else cmDrafts[dk] = { state, t: Date.now() };
+  cmWriteDrafts();
+}
+function cmDraftDelete(dk) {
+  if (cmDrafts[dk]) { delete cmDrafts[dk]; cmWriteDrafts(); }
+}
+// Is date ke yaad rakhe ticks main screen ke state me daalo. true = draft mila
+function cmApplyDraft(dk) {
+  const d = cmDrafts[dk];
+  if (!d || !d.state) return false;
+  CM_MEMBERS.forEach(m => { cmState[m.name] = d.state[m.name] || null; });
+  return true;
 }
 
 // ── EDIT MODE (save title -> update) ──────────────────────────────────────────
@@ -569,6 +619,8 @@ function cmOpenViewPage() {
 function cmBackToMain() {
   document.getElementById("cm-view-page").style.display  = "none";
   document.getElementById("cm-main-view").style.display  = "block";
+  // view page saved record dikha rahi ho sakti hai; main screen par is date ke latest (yaad rakhe) ticks hi rahein
+  if (cmApplyDraft(cmDraftDate())) cmRenderMembers(document.getElementById("cmSearchBar").value);
 }
 
 function cmEsc(t) {

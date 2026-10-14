@@ -118,6 +118,7 @@ let sessions = {};           // drafts: "yyyy-mm-dd|offline" -> { id, date, mode
 let eventDocs = [];          // Save se bane events: { id, date, mode, title, marks, createdAt }
 let currentMode = "offline"; // left wale Offline / Online button se badalta hai
 let unsubscribeAttendance = null;
+let titleDrafts = {};        // user ka type kiya (abhi unsaved) event naam: "yyyy-mm-dd|mode" -> text. Tap se ya snapshot se nahi hatta
 let editing = null;          // Edit mode ka working copy: { id, date, mode, title, createdAt, orig, marks } (null = normal mode)
 
 function sessionKey(dateStr, mode) { return dateStr + "|" + mode; }
@@ -524,6 +525,11 @@ function updateModeButtons() {
 function syncTitleInput(force) {
   if (editing) return;   // edit ke dauran naam box user ke control me hai
   if (!force && document.activeElement === titleIn) return;
+  // Pehle user ka type kiya naam (table par tap karne par input blur hota hai aur Firestore snapshot
+  // aata hai -- pehle yahin naam "" se badal jata tha). Naam tabhi hatta hai jab user khud badle/mita de,
+  // ya Save ho jaye.
+  const key = sessionKey(toISO(selectedDate), currentMode);
+  if (Object.prototype.hasOwnProperty.call(titleDrafts, key)) { titleIn.value = titleDrafts[key]; return; }
   const sess = currentSession();
   titleIn.value = sess ? sess.title : "";
 }
@@ -548,7 +554,10 @@ editTitleBtn.addEventListener("click", function () {
   if (!titleRow.classList.contains("hidden")) titleIn.focus();
 });
 
-titleIn.addEventListener("input", function () { setNote(HINT); });
+titleIn.addEventListener("input", function () {
+  setNote(HINT);
+  if (!editing) titleDrafts[sessionKey(toISO(selectedDate), currentMode)] = titleIn.value;   // khaali bhi yaad rakho (user ne khud mitaya)
+});
 titleIn.addEventListener("keydown", function (e) {
   if (e.key === "Enter") { e.preventDefault(); saveTitleBtn.click(); }
 });
@@ -577,6 +586,7 @@ saveTitleBtn.addEventListener("click", async function () {
   if (draftId) delete rawDocs[draftId];
   buildSessions();
   titleIn.value = "";
+  delete titleDrafts[sessionKey(dateStr, currentMode)];   // naam ab event ban gaya
   renderAll();
   setNote("Saved. It now shows in Events.");
 

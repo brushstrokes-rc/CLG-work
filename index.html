@@ -16,7 +16,7 @@
 
 <!-- NAYA: fonts + theme (light/dark) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Caveat+Brush&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Caveat+Brush&family=Pacifico&family=Dancing+Script:wght@400;700&family=Playfair+Display:wght@400;700&family=Poppins:wght@400;700&family=Lobster&family=Nunito:wght@400;700&family=Raleway:wght@400;700&family=Satisfy&display=swap" rel="stylesheet">
 <script>
 try{var __t=localStorage.getItem("bs-theme")}catch(e){}
 if(!__t)__t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";
@@ -26,7 +26,7 @@ document.documentElement.dataset.theme=__t;
 <link rel="stylesheet" href="brushstroke.css">
 <link rel="stylesheet" href="app-shell.css"><!-- NAYA: brushstroke.css ke baad -->
 <link rel="stylesheet" href="student-profile.css"><!-- NAYA: student profile pages -->
-<link rel="stylesheet" href="announcements.css"><!-- Announcement Maker -->
+<link rel="stylesheet" href="announcements.css">
 <link rel="stylesheet" href="Core-members-view.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
@@ -336,24 +336,83 @@ document.documentElement.dataset.theme=__t;
       <!-- CORE MEMBERS: sirf EK container, <main> ke andar (Home / Attendance ke andar nahi) -->
       <div id="core-members-view" style="display:none;"></div>
 
-      <!-- ── ANNOUNCEMENTS PAGE ─────────────────────────────── -->
+      <!-- ANNOUNCEMENTS PAGE -->
       <div id="viewAnnouncements" hidden>
         <div class="ann-page-header">
-          <h2>📢 Announcements</h2>
+          <h2 class="sec-title">📢 Announcements</h2>
           <button class="ann-add-btn" id="annAddBtn">🔊 Add Announcement</button>
         </div>
         <div class="ann-grid" id="annGrid"></div>
-        <div class="ann-empty" id="annEmpty" hidden>
-          <div class="ann-empty-icon">📋</div>
+        <div class="ann-empty" id="annEmpty">
+          <div style="font-size:48px;margin-bottom:12px;">📋</div>
           <p>No announcements yet.<br>Click <strong>Add Announcement</strong> to create your first poster.</p>
         </div>
       </div>
-
     </main>
 
-    <!-- ── ANNOUNCEMENT EDITOR (full-screen overlay, outside main) ── -->
-    <div id="annEditor" class="hidden">
-      <!-- Content injected by announcements.js at runtime -->
+    <!-- EDITOR OVERLAY (outside main, full screen) -->
+    <div id="annEditor" class="ann-editor-hidden">
+      <!-- Toolbar -->
+      <div class="ann-toolbar">
+        <button class="ann-close-btn" id="annCloseBtn">✕ Close</button>
+
+        <div class="ann-tool-group">
+          <label class="ann-tool-lbl">Font Size</label>
+          <input type="number" id="annFontSize" value="32" min="8" max="200" class="ann-num-input">
+        </div>
+
+        <div class="ann-tool-group">
+          <label class="ann-tool-lbl">Font</label>
+          <select id="annFont" class="ann-select">
+            <option value="'Pacifico',cursive">Pacifico</option>
+            <option value="'Caveat',cursive">Caveat</option>
+            <option value="'Dancing Script',cursive">Dancing Script</option>
+            <option value="'Playfair Display',serif">Playfair Display</option>
+            <option value="'Poppins',sans-serif">Poppins</option>
+            <option value="'Lobster',cursive">Lobster</option>
+            <option value="'Nunito',sans-serif">Nunito</option>
+            <option value="'Raleway',sans-serif">Raleway</option>
+            <option value="'Satisfy',cursive">Satisfy</option>
+            <option value="system-ui,sans-serif">System Default</option>
+          </select>
+        </div>
+
+        <div class="ann-tool-group">
+          <label class="ann-tool-lbl">Text Color</label>
+          <input type="color" id="annTextColor" value="#1a1a1a" class="ann-color-input">
+        </div>
+
+        <div class="ann-tool-group">
+          <label class="ann-tool-lbl">BG Color</label>
+          <input type="color" id="annBgColor" value="#fffef8" class="ann-color-input">
+        </div>
+
+        <div class="ann-tool-group">
+          <label class="ann-tool-lbl">Align</label>
+          <div class="ann-align-btns">
+            <button class="ann-align-btn" data-align="left"   title="Left">&#8676;</button>
+            <button class="ann-align-btn active" data-align="center" title="Center">&#8644;</button>
+            <button class="ann-align-btn" data-align="right"  title="Right">&#8677;</button>
+          </div>
+        </div>
+
+        <div class="ann-toolbar-right">
+          <input type="text" id="annTitle" placeholder="Poster title…" class="ann-title-input">
+          <button class="ann-upload-btn" id="annUploadBtn">📤 Upload</button>
+        </div>
+      </div>
+
+      <!-- Canvas area -->
+      <div class="ann-canvas-area">
+        <div class="ann-canvas" id="annCanvas">
+          <div
+            id="annText"
+            class="ann-text"
+            contenteditable="true"
+            spellcheck="false"
+          >Write your announcement here…</div>
+        </div>
+      </div>
     </div>
 
     <footer class="app-footer">
@@ -400,21 +459,7 @@ document.documentElement.dataset.theme=__t;
 <script type="module" src="brushstroke.js"></script>
 <script type="module" src="app-shell.js"></script>
 <script type="module" src="student-profile.js"></script><!-- NAYA: app-shell.js ke baad -->
-<script type="module" src="announcements.js"></script><!-- Announcement Maker -->
-<script>
-  // Wire up the "Add Announcement" button once DOM is ready
-  document.addEventListener("DOMContentLoaded", function () {
-    var btn = document.getElementById("annAddBtn");
-    if (btn) {
-      btn.addEventListener("click", function () {
-        // Ensure announcements.js has initialised
-        if (typeof window._annOpenEditor === "function") {
-          window._annOpenEditor(null);
-        }
-      });
-    }
-  });
-</script>
+<script type="module" src="announcements.js"></script>
 <script src="attendance-view.js"></script><!-- NAYA: brushstroke.js ke baad -->
 <!-- index.html mein ye check karo — type="module" hona chahiye -->
 <script type="module" src="Core-members-view.js"></script>

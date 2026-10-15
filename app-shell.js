@@ -29,7 +29,6 @@ function showApp(view, clicked) {
     const page = document.getElementById(id);
     if (!page) return;
     if (key === "coremembers") {
-      // Core Members: display se control karo
       page.hidden = false;
       page.style.display = key === view ? "block" : "none";
     } else {
@@ -37,11 +36,6 @@ function showApp(view, clicked) {
       page.style.display = "";
     }
   });
-  // Announcements page: fire init event on first visit
-  if (view === "announcements" && !window._annInit) {
-    window._annInit = true;
-    window.dispatchEvent(new CustomEvent("bs:announcements"));
-  }
 
   if (view === "coremembers") {
     const attSec = document.getElementById("attendanceSection");

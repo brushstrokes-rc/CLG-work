@@ -21,7 +21,8 @@ function showApp(view, clicked) {
     attendance: "viewAttendance",
     attendancesummary: "viewAttendanceSummary",
     events: "viewEvents",
-    coremembers: "core-members-view"
+    coremembers: "core-members-view",
+    announcements: "viewAnnouncements"
   };
 
   Object.entries(pages).forEach(function ([key, id]) {
@@ -36,6 +37,11 @@ function showApp(view, clicked) {
       page.style.display = "";
     }
   });
+  // Announcements page: fire init event on first visit
+  if (view === "announcements" && !window._annInit) {
+    window._annInit = true;
+    window.dispatchEvent(new CustomEvent("bs:announcements"));
+  }
 
   if (view === "coremembers") {
     const attSec = document.getElementById("attendanceSection");

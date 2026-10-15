@@ -26,6 +26,7 @@ document.documentElement.dataset.theme=__t;
 <link rel="stylesheet" href="brushstroke.css">
 <link rel="stylesheet" href="app-shell.css"><!-- NAYA: brushstroke.css ke baad -->
 <link rel="stylesheet" href="student-profile.css"><!-- NAYA: student profile pages -->
+<link rel="stylesheet" href="announcements.css"><!-- Announcement Maker -->
 <link rel="stylesheet" href="Core-members-view.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
@@ -109,7 +110,7 @@ document.documentElement.dataset.theme=__t;
       <a href="#events" data-view="events">Events</a>
       <a href="#core-members" data-view="coremembers">Core Members</a>
       <a href="#info" data-view="home">Info</a>
-      <a href="#announcements" data-view="home">Announcements</a>
+      <a href="#announcements" data-view="announcements">Announcements</a>
     </nav>
 
     <button id="themeBtn" type="button" aria-label="Switch light or dark canvas mode">🌙</button>
@@ -334,7 +335,26 @@ document.documentElement.dataset.theme=__t;
       </div>
       <!-- CORE MEMBERS: sirf EK container, <main> ke andar (Home / Attendance ke andar nahi) -->
       <div id="core-members-view" style="display:none;"></div>
+
+      <!-- ── ANNOUNCEMENTS PAGE ─────────────────────────────── -->
+      <div id="viewAnnouncements" hidden>
+        <div class="ann-page-header">
+          <h2>📢 Announcements</h2>
+          <button class="ann-add-btn" id="annAddBtn">🔊 Add Announcement</button>
+        </div>
+        <div class="ann-grid" id="annGrid"></div>
+        <div class="ann-empty" id="annEmpty" hidden>
+          <div class="ann-empty-icon">📋</div>
+          <p>No announcements yet.<br>Click <strong>Add Announcement</strong> to create your first poster.</p>
+        </div>
+      </div>
+
     </main>
+
+    <!-- ── ANNOUNCEMENT EDITOR (full-screen overlay, outside main) ── -->
+    <div id="annEditor" class="hidden">
+      <!-- Content injected by announcements.js at runtime -->
+    </div>
 
     <footer class="app-footer">
   <p class="f-top">Brushstroke Society &nbsp;·&nbsp; Ramanujan College &nbsp;·&nbsp; University of Delhi</p>
@@ -380,6 +400,21 @@ document.documentElement.dataset.theme=__t;
 <script type="module" src="brushstroke.js"></script>
 <script type="module" src="app-shell.js"></script>
 <script type="module" src="student-profile.js"></script><!-- NAYA: app-shell.js ke baad -->
+<script type="module" src="announcements.js"></script><!-- Announcement Maker -->
+<script>
+  // Wire up the "Add Announcement" button once DOM is ready
+  document.addEventListener("DOMContentLoaded", function () {
+    var btn = document.getElementById("annAddBtn");
+    if (btn) {
+      btn.addEventListener("click", function () {
+        // Ensure announcements.js has initialised
+        if (typeof window._annOpenEditor === "function") {
+          window._annOpenEditor(null);
+        }
+      });
+    }
+  });
+</script>
 <script src="attendance-view.js"></script><!-- NAYA: brushstroke.js ke baad -->
 <!-- index.html mein ye check karo — type="module" hona chahiye -->
 <script type="module" src="Core-members-view.js"></script>

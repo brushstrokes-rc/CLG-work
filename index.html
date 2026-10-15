@@ -350,69 +350,89 @@ document.documentElement.dataset.theme=__t;
       </div>
     </main>
 
-    <!-- EDITOR OVERLAY (outside main, full screen) -->
+    <!-- EDITOR OVERLAY (full-screen, outside main) -->
     <div id="annEditor" class="ann-editor-hidden">
-      <!-- Toolbar -->
-      <div class="ann-toolbar">
-        <button class="ann-close-btn" id="annCloseBtn">✕ Close</button>
 
+      <!-- ── Toolbar ── -->
+      <div class="ann-toolbar" id="annToolbarWrap">
+
+        <button class="ann-close-btn" id="annCloseBtn">✕</button>
+
+        <div class="ann-sep"></div>
+
+        <!-- Font size -->
         <div class="ann-tool-group">
-          <label class="ann-tool-lbl">Font Size</label>
-          <input type="number" id="annFontSize" value="32" min="8" max="200" class="ann-num-input">
+          <span class="ann-tool-lbl">Size</span>
+          <input type="number" id="annFontSize" value="36" min="6" max="200" class="ann-num-input">
         </div>
 
+        <!-- Font family -->
         <div class="ann-tool-group">
-          <label class="ann-tool-lbl">Font</label>
+          <span class="ann-tool-lbl">Font</span>
           <select id="annFont" class="ann-select">
             <option value="'Pacifico',cursive">Pacifico</option>
             <option value="'Caveat',cursive">Caveat</option>
             <option value="'Dancing Script',cursive">Dancing Script</option>
             <option value="'Playfair Display',serif">Playfair Display</option>
-            <option value="'Poppins',sans-serif">Poppins</option>
             <option value="'Lobster',cursive">Lobster</option>
+            <option value="'Satisfy',cursive">Satisfy</option>
+            <option value="'Poppins',sans-serif">Poppins</option>
             <option value="'Nunito',sans-serif">Nunito</option>
             <option value="'Raleway',sans-serif">Raleway</option>
-            <option value="'Satisfy',cursive">Satisfy</option>
-            <option value="system-ui,sans-serif">System Default</option>
+            <option value="system-ui,sans-serif">System</option>
           </select>
         </div>
 
+        <!-- Text color -->
         <div class="ann-tool-group">
-          <label class="ann-tool-lbl">Text Color</label>
-          <input type="color" id="annTextColor" value="#1a1a1a" class="ann-color-input">
+          <span class="ann-tool-lbl">Text</span>
+          <input type="color" id="annTextColor" value="#1a1a1a" class="ann-color-input" title="Text colour">
         </div>
 
+        <!-- BG color -->
         <div class="ann-tool-group">
-          <label class="ann-tool-lbl">BG Color</label>
-          <input type="color" id="annBgColor" value="#fffef8" class="ann-color-input">
+          <span class="ann-tool-lbl">BG</span>
+          <input type="color" id="annBgColor" value="#fffef8" class="ann-color-input" title="Background colour">
         </div>
 
+        <div class="ann-sep"></div>
+
+        <!-- Align -->
         <div class="ann-tool-group">
-          <label class="ann-tool-lbl">Align</label>
+          <span class="ann-tool-lbl">Align</span>
           <div class="ann-align-btns">
-            <button class="ann-align-btn" data-align="left"   title="Left">&#8676;</button>
-            <button class="ann-align-btn active" data-align="center" title="Center">&#8644;</button>
-            <button class="ann-align-btn" data-align="right"  title="Right">&#8677;</button>
+            <button class="ann-align-btn" data-align="left"   title="Left">⬅</button>
+            <button class="ann-align-btn active" data-align="center" title="Centre">↔</button>
+            <button class="ann-align-btn" data-align="right"  title="Right">➡</button>
           </div>
         </div>
 
+        <div class="ann-sep"></div>
+
+        <!-- Undo / Redo / Clear -->
+        <button class="ann-icon-btn" id="annUndoBtn" title="Undo (Ctrl+Z)">↩</button>
+        <button class="ann-icon-btn" id="annRedoBtn" title="Redo (Ctrl+Y)">↪</button>
+        <button class="ann-icon-btn" id="annClearBtn" title="Clear all text boxes" style="color:#c0392b;">🗑</button>
+
+        <div class="ann-sep"></div>
+
+        <!-- Add text box -->
+        <button class="ann-icon-btn ann-add-text-btn" id="annAddTextBtn" title="Add new text box">＋ Text</button>
+
+        <!-- Right side -->
         <div class="ann-toolbar-right">
           <input type="text" id="annTitle" placeholder="Poster title…" class="ann-title-input">
           <button class="ann-upload-btn" id="annUploadBtn">📤 Upload</button>
         </div>
       </div>
 
-      <!-- Canvas area -->
+      <!-- ── Canvas workspace ── -->
       <div class="ann-canvas-area">
         <div class="ann-canvas" id="annCanvas">
-          <div
-            id="annText"
-            class="ann-text"
-            contenteditable="true"
-            spellcheck="false"
-          >Write your announcement here…</div>
+          <!-- text boxes injected here by JS -->
         </div>
       </div>
+
     </div>
 
     <footer class="app-footer">

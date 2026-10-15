@@ -1,9 +1,10 @@
 // ================================================================
-//  announcements.js  —  Simple Announcement Maker
-//  Features: text editor (size, font, color, bg, align)
-//            Upload → Firestore + preview card on announcements page
-//            Edit → reopen same poster
-//            Delete → remove from page
+//  announcements.js  —  Announcement Maker (Complete Rewrite)
+//  - Multiple draggable text boxes on canvas
+//  - Toolbar: font size, font, text color, bg color, align
+//  - Undo / Redo / Clear All
+//  - Upload → Firestore + Storage preview PNG → card on page
+//  - Edit (reopen) / Delete
 // ================================================================
 import { getApp }  from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
@@ -12,183 +13,487 @@ import {
   deleteDoc, onSnapshot, query, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import {
-  getStorage, ref, uploadString, getDownloadURL, deleteObject, listAll
+  getStorage, ref as sRef, uploadString,
+  getDownloadURL, deleteObject, listAll
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-storage.js";
 
 const auth    = getAuth(getApp());
 const db      = getFirestore(getApp());
 const storage = getStorage(getApp());
 
-// ── DOM refs ──────────────────────────────────────────────────────
-const editor     = () => document.getElementById("annEditor");
-const canvas     = () => document.getElementById("annCanvas");
-const textEl     = () => document.getElementById("annText");
-const annGrid    = () => document.getElementById("annGrid");
-const annEmpty   = () => document.getElementById("annEmpty");
-
 // ── State ─────────────────────────────────────────────────────────
-let editingId  = null;   // Firestore docId (null = new poster)
-let annUnsub   = null;
+let editingId   = null;
+let annUnsub    = null;
+let boxes       = [];          // array of box objects
+let selectedId  = null;
+let undoStack   = [];
+let redoStack   = [];
+let idCounter   = 0;
 
-// ── Open / Close editor ───────────────────────────────────────────
-function openEditor(docId, savedData) {
-  editingId = docId || null;
+function newId() { return "b" + (++idCounter); }
 
-  // Reset to defaults
-  const fs    = document.getElementById("annFontSize");
-  const font  = document.getElementById("annFont");
-  const tc    = document.getElementById("annTextColor");
-  const bg    = document.getElementById("annBgColor");
-  const title = document.getElementById("annTitle");
+// Default box template
+function defaultBox(id) {
+  return {
+    id,
+    text:       "Write your text here…",
+    x:          60,
+    y:          60,
+    fontSize:   36,
+    fontFamily: "'Pacifico',cursive",
+    color:      "#1a1a1a",
+    align:      "center",
+    width:      460,   // px
+  };
+}
 
-  if (savedData) {
-    fs.value    = savedData.fontSize  || 32;
-    font.value  = savedData.font      || "'Pacifico',cursive";
-    tc.value    = savedData.textColor || "#1a1a1a";
-    bg.value    = savedData.bgColor   || "#fffef8";
-    title.value = savedData.title     || "";
-    textEl().innerHTML = savedData.html || "Write your announcement here…";
-    // Restore align active state
-    document.querySelectorAll(".ann-align-btn").forEach(b => {
-      b.classList.toggle("active", b.dataset.align === (savedData.align || "center"));
+// ── Undo / Redo helpers ───────────────────────────────────────────
+function snapshot() {
+  return JSON.stringify(boxes.map(b => ({ ...b })));
+}
+function pushUndo() {
+  undoStack.push(snapshot());
+  if (undoStack.length > 40) undoStack.shift();
+  redoStack = [];
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshot());
+  boxes = JSON.parse(undoStack.pop());
+  selectedId = null;
+  renderCanvas();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshot());
+  boxes = JSON.parse(redoStack.pop());
+  selectedId = null;
+  renderCanvas();
+}
+
+// ── Canvas render ─────────────────────────────────────────────────
+function getCanvas()  { return document.getElementById("annCanvas"); }
+function getToolbar() { return document.getElementById("annToolbarWrap"); }
+
+function renderCanvas() {
+  const cv = getCanvas();
+  if (!cv) return;
+  // Keep only non-box children (nothing extra here, but safe)
+  cv.querySelectorAll(".ann-box").forEach(el => el.remove());
+
+  boxes.forEach(box => {
+    const wrap = document.createElement("div");
+    wrap.className = "ann-box" + (box.id === selectedId ? " ann-box-selected" : "");
+    wrap.dataset.id = box.id;
+    wrap.style.cssText = `
+      position:absolute;
+      left:${box.x}px;
+      top:${box.y}px;
+      width:${box.width}px;
+      cursor:move;
+      padding:6px 8px;
+      box-sizing:border-box;
+      border-radius:3px;
+      user-select:none;
+    `;
+
+    // The editable text inside
+    const txt = document.createElement("div");
+    txt.className      = "ann-box-text";
+    txt.contentEditable = "true";
+    txt.spellcheck      = false;
+    txt.style.cssText  = `
+      font-size:${box.fontSize}px;
+      font-family:${box.fontFamily};
+      color:${box.color};
+      text-align:${box.align};
+      outline:none;
+      word-break:break-word;
+      white-space:pre-wrap;
+      line-height:1.35;
+      min-height:1em;
+      cursor:text;
+    `;
+    txt.innerHTML = box.text;
+
+    // Sync text back on edit
+    txt.addEventListener("input", () => {
+      box.text = txt.innerHTML;
     });
-    applyAlign(savedData.align || "center");
-  } else {
-    fs.value    = 32;
-    font.value  = "'Pacifico',cursive";
-    tc.value    = "#1a1a1a";
-    bg.value    = "#fffef8";
-    title.value = "";
-    textEl().innerHTML = "Write your announcement here…";
-    document.querySelectorAll(".ann-align-btn").forEach((b, i) => b.classList.toggle("active", i === 1));
-    applyAlign("center");
+    // Select this box when clicking text
+    txt.addEventListener("mousedown", e => {
+      e.stopPropagation();
+      selectBox(box.id);
+    });
+    txt.addEventListener("focus", () => selectBox(box.id));
+
+    wrap.appendChild(txt);
+
+    // ── Drag logic on the wrap (not the text) ──
+    wrap.addEventListener("mousedown", e => {
+      // Only drag if NOT clicking directly on the text (text area handles its own clicks)
+      if (e.target === txt || txt.contains(e.target)) return;
+      e.preventDefault();
+      selectBox(box.id);
+      startDrag(e, box, wrap);
+    });
+
+    // Also allow dragging by clicking the border area (2px around)
+    // We add a thin invisible drag-handle strip at top
+    const handle = document.createElement("div");
+    handle.className = "ann-drag-handle";
+    handle.title = "Drag to move";
+    handle.style.cssText = `
+      position:absolute;
+      top:0; left:0; right:0;
+      height:14px;
+      cursor:move;
+      background:${box.id === selectedId ? "rgba(43,120,184,.15)" : "transparent"};
+      border-radius:3px 3px 0 0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:9px;
+      color:rgba(43,120,184,.6);
+      letter-spacing:2px;
+    `;
+    handle.textContent = box.id === selectedId ? "✦ drag ✦" : "";
+    handle.addEventListener("mousedown", e => {
+      e.preventDefault();
+      selectBox(box.id);
+      startDrag(e, box, wrap);
+    });
+    wrap.insertBefore(handle, txt);
+
+    // Add padding-top so text doesn't sit under handle
+    txt.style.paddingTop = "14px";
+
+    // Delete button (visible on select)
+    if (box.id === selectedId) {
+      const delBtn = document.createElement("button");
+      delBtn.className = "ann-box-del";
+      delBtn.title = "Delete this text";
+      delBtn.textContent = "✕";
+      delBtn.style.cssText = `
+        position:absolute;
+        top:-10px; right:-10px;
+        width:22px; height:22px;
+        border-radius:50%;
+        border:none;
+        background:#c0392b;
+        color:#fff;
+        font-size:11px;
+        font-weight:700;
+        cursor:pointer;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        z-index:10;
+        line-height:1;
+      `;
+      delBtn.addEventListener("mousedown", e => {
+        e.preventDefault();
+        e.stopPropagation();
+        pushUndo();
+        boxes = boxes.filter(b => b.id !== box.id);
+        selectedId = null;
+        renderCanvas();
+      });
+      wrap.appendChild(delBtn);
+    }
+
+    cv.appendChild(wrap);
+  });
+}
+
+// ── Drag ─────────────────────────────────────────────────────────
+function startDrag(e, box, wrap) {
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const origX  = box.x;
+  const origY  = box.y;
+  let moved    = false;
+
+  function onMove(mv) {
+    const dx = mv.clientX - startX;
+    const dy = mv.clientY - startY;
+    if (!moved && Math.abs(dx) + Math.abs(dy) > 3) {
+      pushUndo();
+      moved = true;
+    }
+    box.x = Math.max(0, origX + dx);
+    box.y = Math.max(0, origY + dy);
+    wrap.style.left = box.x + "px";
+    wrap.style.top  = box.y + "px";
   }
-
-  applyStyles();
-  editor().classList.remove("ann-editor-hidden");
-  document.body.style.overflow = "hidden";
-  textEl().focus();
+  function onUp() {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup",   onUp);
+  }
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup",   onUp);
 }
 
-function closeEditor() {
-  editor().classList.add("ann-editor-hidden");
-  document.body.style.overflow = "";
+// ── Select box + sync toolbar ─────────────────────────────────────
+function selectBox(id) {
+  if (selectedId === id) return;
+  selectedId = id;
+  renderCanvas();
+  syncToolbarToBox(id);
+  // Focus the text inside
+  requestAnimationFrame(() => {
+    const el = document.querySelector(`.ann-box[data-id="${id}"] .ann-box-text`);
+    if (el) el.focus();
+  });
 }
 
-// ── Apply text styles to canvas ───────────────────────────────────
-function applyStyles() {
-  const t  = textEl();
-  const cv = canvas();
-  if (!t || !cv) return;
-
-  const fontSize  = parseInt(document.getElementById("annFontSize").value) || 32;
-  const font      = document.getElementById("annFont").value;
-  const textColor = document.getElementById("annTextColor").value;
-  const bgColor   = document.getElementById("annBgColor").value;
-
-  t.style.fontSize   = fontSize + "px";
-  t.style.fontFamily = font;
-  t.style.color      = textColor;
-  cv.style.background = bgColor;
+function syncToolbarToBox(id) {
+  const box = boxes.find(b => b.id === id);
+  if (!box) return;
+  const fs = document.getElementById("annFontSize");
+  const fn = document.getElementById("annFont");
+  const tc = document.getElementById("annTextColor");
+  if (fs) fs.value = box.fontSize;
+  if (fn) fn.value = box.fontFamily;
+  if (tc) tc.value = box.color.startsWith("#") ? box.color : "#1a1a1a";
+  document.querySelectorAll(".ann-align-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.align === box.align);
+  });
 }
 
-function applyAlign(align) {
-  const t = textEl();
-  if (t) t.style.textAlign = align;
+// ── Apply toolbar change to selected box ─────────────────────────
+function applyToSelected(fn) {
+  const box = boxes.find(b => b.id === selectedId);
+  if (!box) return;
+  fn(box);
+  // Update just the style of the text element (no full re-render = no focus loss)
+  const el = document.querySelector(`.ann-box[data-id="${box.id}"] .ann-box-text`);
+  if (!el) return;
+  el.style.fontSize   = box.fontSize   + "px";
+  el.style.fontFamily = box.fontFamily;
+  el.style.color      = box.color;
+  el.style.textAlign  = box.align;
 }
 
 // ── Toolbar bindings ──────────────────────────────────────────────
 function bindToolbar() {
-  // Font size — use "input" so typing a number works live, not just on blur
-  document.getElementById("annFontSize").addEventListener("input", applyStyles);
-  document.getElementById("annFontSize").addEventListener("change", applyStyles);
+  // Font size — live as user types
+  const fsInput = document.getElementById("annFontSize");
+  fsInput.addEventListener("input", () => {
+    const val = parseInt(fsInput.value);
+    if (!val || val < 6) return;   // skip if empty / too small while typing
+    applyToSelected(b => { b.fontSize = val; });
+  });
 
-  document.getElementById("annFont").addEventListener("change", applyStyles);
-  document.getElementById("annTextColor").addEventListener("input", applyStyles);
-  document.getElementById("annBgColor").addEventListener("input", applyStyles);
+  // Font family
+  document.getElementById("annFont").addEventListener("change", e => {
+    applyToSelected(b => { b.fontFamily = e.target.value; });
+  });
 
-  // Align buttons
+  // Text color
+  document.getElementById("annTextColor").addEventListener("input", e => {
+    applyToSelected(b => { b.color = e.target.value; });
+  });
+
+  // BG color
+  document.getElementById("annBgColor").addEventListener("input", e => {
+    const cv = getCanvas();
+    if (cv) cv.style.background = e.target.value;
+  });
+
+  // Align
   document.querySelectorAll(".ann-align-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       document.querySelectorAll(".ann-align-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
-      applyAlign(btn.dataset.align);
+      applyToSelected(b => { b.align = btn.dataset.align; });
     });
   });
 
-  // Close
+  // Add Text button
+  document.getElementById("annAddTextBtn").addEventListener("click", () => {
+    pushUndo();
+    const box = defaultBox(newId());
+    // Stagger new boxes so they don't overlap exactly
+    box.x = 60 + (boxes.length * 10) % 100;
+    box.y = 60 + (boxes.length * 10) % 100;
+    boxes.push(box);
+    selectedId = box.id;
+    renderCanvas();
+    syncToolbarToBox(box.id);
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`.ann-box[data-id="${box.id}"] .ann-box-text`);
+      if (el) { el.focus(); el.select && el.select(); }
+    });
+  });
+
+  // Undo / Redo
+  document.getElementById("annUndoBtn").addEventListener("click", undo);
+  document.getElementById("annRedoBtn").addEventListener("click", redo);
+
+  // Clear All
+  document.getElementById("annClearBtn").addEventListener("click", () => {
+    if (!boxes.length) return;
+    if (!confirm("Clear all text boxes?")) return;
+    pushUndo();
+    boxes = [];
+    selectedId = null;
+    renderCanvas();
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener("keydown", e => {
+    const ed = document.getElementById("annEditor");
+    if (!ed || ed.classList.contains("ann-editor-hidden")) return;
+    if ((e.ctrlKey || e.metaKey) && e.key === "z") { e.preventDefault(); undo(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === "y") { e.preventDefault(); redo(); }
+    if ((e.key === "Delete" || e.key === "Backspace") && e.target === document.body && selectedId) {
+      e.preventDefault();
+      pushUndo();
+      boxes = boxes.filter(b => b.id !== selectedId);
+      selectedId = null;
+      renderCanvas();
+    }
+  });
+
+  // Close editor
   document.getElementById("annCloseBtn").addEventListener("click", () => {
     if (confirm("Close editor? Unsaved changes will be lost.")) closeEditor();
   });
 
-  // Upload
+  // Upload button
   document.getElementById("annUploadBtn").addEventListener("click", uploadAnnouncement);
 
-  // Add Announcement button on the page
+  // Add Announcement button on listing page
   document.getElementById("annAddBtn").addEventListener("click", () => openEditor(null, null));
+
+  // Deselect when clicking canvas background
+  getCanvas().addEventListener("mousedown", e => {
+    if (e.target === getCanvas()) {
+      selectedId = null;
+      renderCanvas();
+    }
+  });
 }
 
-// ── Capture poster as PNG via html2canvas ─────────────────────────
-async function capturePreview() {
-  if (typeof html2canvas === "undefined") return null;
-  try {
-    const c = await html2canvas(canvas(), {
-      scale: 1,
-      useCORS: true,
-      backgroundColor: document.getElementById("annBgColor").value || "#fffef8"
-    });
-    return c.toDataURL("image/png", 0.85);
-  } catch (e) {
-    console.error("Preview capture failed:", e);
-    return null;
+// ── Open / Close editor ───────────────────────────────────────────
+function openEditor(docId, savedData) {
+  editingId  = docId || null;
+  boxes      = [];
+  selectedId = null;
+  undoStack  = [];
+  redoStack  = [];
+
+  const cv = getCanvas();
+
+  if (savedData && savedData.boxes) {
+    // Restore saved boxes
+    boxes = savedData.boxes.map(b => ({ ...b }));
+    idCounter = boxes.reduce((m, b) => Math.max(m, parseInt(b.id.slice(1)) || 0), 0);
+    // Restore bg
+    if (cv && savedData.bgColor) cv.style.background = savedData.bgColor;
+    document.getElementById("annBgColor").value = savedData.bgColor || "#fffef8";
+    document.getElementById("annTitle").value   = savedData.title   || "";
+  } else {
+    // Fresh: one default text box
+    if (cv) cv.style.background = "#fffef8";
+    document.getElementById("annBgColor").value = "#fffef8";
+    document.getElementById("annTitle").value   = "";
+    const b = defaultBox(newId());
+    b.x = 40; b.y = 80;
+    boxes.push(b);
+    selectedId = b.id;
   }
+
+  renderCanvas();
+  if (selectedId) syncToolbarToBox(selectedId);
+
+  document.getElementById("annEditor").classList.remove("ann-editor-hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function closeEditor() {
+  document.getElementById("annEditor").classList.add("ann-editor-hidden");
+  document.body.style.overflow = "";
+}
+
+// ── Capture poster preview PNG ────────────────────────────────────
+async function capturePreview() {
+  // Deselect so selection outlines don't show in preview
+  const prevSel = selectedId;
+  selectedId = null;
+  renderCanvas();
+
+  let dataUrl = null;
+  if (typeof html2canvas !== "undefined") {
+    try {
+      const c = await html2canvas(getCanvas(), {
+        scale: 1,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: document.getElementById("annBgColor").value || "#fffef8"
+      });
+      dataUrl = c.toDataURL("image/png", 0.9);
+    } catch (e) { console.error("html2canvas failed:", e); }
+  }
+
+  // Restore selection
+  selectedId = prevSel;
+  renderCanvas();
+  return dataUrl;
 }
 
 // ── Upload (publish) announcement ─────────────────────────────────
 async function uploadAnnouncement() {
   const user = auth.currentUser;
   if (!user) { alert("Not logged in."); return; }
+  if (!boxes.length) { alert("Add at least one text box first."); return; }
 
-  const title     = document.getElementById("annTitle").value.trim() || "Untitled";
-  const fontSize  = parseInt(document.getElementById("annFontSize").value) || 32;
-  const font      = document.getElementById("annFont").value;
-  const textColor = document.getElementById("annTextColor").value;
-  const bgColor   = document.getElementById("annBgColor").value;
-  const html      = textEl().innerHTML;
-  const align     = document.querySelector(".ann-align-btn.active")?.dataset.align || "center";
+  const title   = (document.getElementById("annTitle").value || "").trim() || "Untitled";
+  const bgColor = document.getElementById("annBgColor").value || "#fffef8";
+  const btn     = document.getElementById("annUploadBtn");
 
-  const btn = document.getElementById("annUploadBtn");
-  btn.disabled = true;
+  btn.disabled    = true;
   btn.textContent = "Uploading…";
 
+  // Sync latest text content from DOM into boxes array
+  boxes.forEach(box => {
+    const el = document.querySelector(`.ann-box[data-id="${box.id}"] .ann-box-text`);
+    if (el) box.text = el.innerHTML;
+  });
+
+  const projectData = {
+    title,
+    bgColor,
+    boxes: boxes.map(b => ({ ...b }))
+  };
+
   try {
-    // 1. Save or update Firestore doc
     let docId = editingId;
-    const projectData = { title, fontSize, font, textColor, bgColor, html, align };
 
     if (!docId) {
-      const ref_ = await addDoc(collection(db, "announcements"), {
+      const r = await addDoc(collection(db, "announcements"), {
         ...projectData,
-        published: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        createdBy: user.uid,
-        previewUrl: ""
+        published:  true,
+        previewUrl: "",
+        createdAt:  serverTimestamp(),
+        updatedAt:  serverTimestamp(),
+        createdBy:  user.uid
       });
-      docId = ref_.id;
+      docId    = r.id;
       editingId = docId;
     } else {
       await setDoc(doc(db, "announcements", docId), {
         ...projectData,
-        published: true,
-        updatedAt: serverTimestamp()
+        published:  true,
+        updatedAt:  serverTimestamp()
       }, { merge: true });
     }
 
-    // 2. Generate preview PNG and upload to Storage
+    // Generate + upload preview PNG
     const previewData = await capturePreview();
     if (previewData) {
-      const pRef = ref(storage, `announcements/${docId}/preview.png`);
+      const pRef = sRef(storage, `announcements/${docId}/preview.png`);
       await uploadString(pRef, previewData, "data_url");
       const previewUrl = await getDownloadURL(pRef);
       await setDoc(doc(db, "announcements", docId), { previewUrl }, { merge: true });
@@ -196,132 +501,115 @@ async function uploadAnnouncement() {
 
     btn.textContent = "✅ Uploaded!";
     setTimeout(() => {
-      btn.disabled = false;
+      btn.disabled    = false;
       btn.textContent = "📤 Upload";
       closeEditor();
-    }, 1000);
+    }, 900);
 
   } catch (e) {
     console.error("Upload failed:", e);
-    alert("Upload failed. Check console.");
-    btn.disabled = false;
+    alert("Upload failed — check browser console for details.");
+    btn.disabled    = false;
     btn.textContent = "📤 Upload";
   }
 }
 
-// ── Delete announcement ───────────────────────────────────────────
+// ── Delete confirmation ───────────────────────────────────────────
 function confirmDelete(ann) {
   const overlay = document.createElement("div");
-  overlay.style.cssText = "position:fixed;inset:0;z-index:700;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px";
-
-  const box = document.createElement("div");
-  box.style.cssText = "background:#fff;color:#222;border-radius:16px;padding:28px 24px 22px;max-width:360px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.25);text-align:center";
-  box.innerHTML = `
-    <p style="font-size:16px;font-weight:700;margin:0 0 6px">Delete this announcement?</p>
-    <p style="font-size:13px;color:#666;margin:0 0 22px">"${ann.title || "Untitled"}"</p>
-    <div style="display:flex;gap:12px;justify-content:center">
-      <button id="annPopNo"  style="flex:1;max-width:120px;padding:11px 0;border:none;border-radius:10px;background:#002aff;color:#fff;font-size:15px;font-weight:700;cursor:pointer">No</button>
-      <button id="annPopYes" style="flex:1;max-width:120px;padding:11px 0;border:none;border-radius:10px;background:#00ff77;color:#111;font-size:15px;font-weight:700;cursor:pointer">Yes, Delete</button>
+  overlay.style.cssText = "position:fixed;inset:0;z-index:700;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px;";
+  overlay.innerHTML = `
+    <div style="background:#fff;color:#222;border-radius:16px;padding:28px 24px 22px;max-width:360px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.25);text-align:center;">
+      <p style="font-size:16px;font-weight:700;margin:0 0 6px;">Delete this announcement?</p>
+      <p style="font-size:13px;color:#666;margin:0 0 22px;">"${(ann.title || "Untitled").replace(/</g,"&lt;")}"</p>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <button data-no style="flex:1;max-width:120px;padding:11px 0;border:none;border-radius:10px;background:#002aff;color:#fff;font-size:15px;font-weight:700;cursor:pointer;">No</button>
+        <button data-yes style="flex:1;max-width:120px;padding:11px 0;border:none;border-radius:10px;background:#00ff77;color:#111;font-size:15px;font-weight:700;cursor:pointer;">Yes, Delete</button>
+      </div>
     </div>`;
-
-  overlay.appendChild(box);
   document.body.appendChild(overlay);
 
-  box.querySelector("#annPopNo").addEventListener("click", () => overlay.remove());
-  box.querySelector("#annPopYes").addEventListener("click", async () => {
+  overlay.querySelector("[data-no]").addEventListener("click",  () => overlay.remove());
+  overlay.querySelector("[data-yes]").addEventListener("click", async () => {
     overlay.remove();
     try {
-      // Delete Storage files
       try {
-        const folder = ref(storage, `announcements/${ann.id}`);
+        const folder = sRef(storage, `announcements/${ann.id}`);
         const listed = await listAll(folder);
         await Promise.all(listed.items.map(r => deleteObject(r)));
       } catch (_) {}
       await deleteDoc(doc(db, "announcements", ann.id));
     } catch (e) {
       console.error("Delete failed:", e);
-      alert("Delete failed. Check console.");
+      alert("Delete failed — check console.");
     }
   });
-
   overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
 }
 
-// ── Render announcements grid ─────────────────────────────────────
+// ── Render announcements listing page ────────────────────────────
 function renderGrid(list) {
-  const grid  = annGrid();
-  const empty = annEmpty();
+  const grid  = document.getElementById("annGrid");
+  const empty = document.getElementById("annEmpty");
   if (!grid || !empty) return;
 
   grid.replaceChildren();
   const published = list.filter(a => a.published);
 
-  if (!published.length) {
-    empty.hidden = false;
-    return;
-  }
+  if (!published.length) { empty.hidden = false; return; }
   empty.hidden = true;
 
   published.forEach(ann => {
     const card = document.createElement("div");
     card.className = "ann-card";
 
-    // Thumbnail
     if (ann.previewUrl) {
       const img = document.createElement("img");
       img.className = "ann-card-thumb";
-      img.src = ann.previewUrl;
-      img.alt = ann.title || "Announcement";
-      img.loading = "lazy";
+      img.src       = ann.previewUrl;
+      img.alt       = ann.title || "Announcement";
+      img.loading   = "lazy";
       card.appendChild(img);
     } else {
       const ph = document.createElement("div");
-      ph.className = "ann-card-thumb-ph";
+      ph.className   = "ann-card-thumb-ph";
       ph.textContent = "📢";
       card.appendChild(ph);
     }
 
-    // Body
-    const body = document.createElement("div");
+    const body  = document.createElement("div");
     body.className = "ann-card-body";
-
-    const title = document.createElement("div");
-    title.className = "ann-card-title";
-    title.textContent = ann.title || "Untitled";
-
-    const date = document.createElement("div");
-    date.className = "ann-card-date";
-    date.textContent = ann.createdAt?.toDate
-      ? ann.createdAt.toDate().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+    const ttl   = document.createElement("div");
+    ttl.className   = "ann-card-title";
+    ttl.textContent = ann.title || "Untitled";
+    const dt    = document.createElement("div");
+    dt.className    = "ann-card-date";
+    dt.textContent  = ann.createdAt?.toDate
+      ? ann.createdAt.toDate().toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })
       : "";
-
-    body.appendChild(title);
-    body.appendChild(date);
+    body.append(ttl, dt);
     card.appendChild(body);
 
-    // Actions
     const actions = document.createElement("div");
     actions.className = "ann-card-actions";
 
     const editBtn = document.createElement("button");
-    editBtn.className = "ann-btn-edit";
+    editBtn.className   = "ann-btn-edit";
     editBtn.textContent = "✏️ Edit";
     editBtn.addEventListener("click", () => openEditor(ann.id, ann));
 
     const delBtn = document.createElement("button");
-    delBtn.className = "ann-btn-del";
+    delBtn.className   = "ann-btn-del";
     delBtn.textContent = "🗑️ Delete";
     delBtn.addEventListener("click", () => confirmDelete(ann));
 
-    actions.appendChild(editBtn);
-    actions.appendChild(delBtn);
+    actions.append(editBtn, delBtn);
     card.appendChild(actions);
-
     grid.appendChild(card);
   });
 }
 
-// ── Firestore listener ────────────────────────────────────────────
+// ── Firestore real-time listener ──────────────────────────────────
 function startListener() {
   if (annUnsub) return;
   const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"));
@@ -338,7 +626,6 @@ function init() {
   startListener();
 }
 
-// Run after DOM ready (module scripts run after parse, so this is fine)
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);
 } else {

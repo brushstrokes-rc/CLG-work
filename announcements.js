@@ -417,30 +417,71 @@ function closeEditor() {
   document.body.style.overflow = "";
 }
 
-// ── Capture poster preview PNG ────────────────────────────────────
+// ── Capture poster preview PNG (pure Canvas API — no html2canvas needed) ──
 async function capturePreview() {
-  // Deselect so selection outlines don't show in preview
-  const prevSel = selectedId;
-  selectedId = null;
-  renderCanvas();
+  const cv     = getCanvas();
+  const bgColor = document.getElementById("annBgColor").value || "#fffef8";
 
-  let dataUrl = null;
-  if (typeof html2canvas !== "undefined") {
-    try {
-      const c = await html2canvas(getCanvas(), {
-        scale: 1,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: document.getElementById("annBgColor").value || "#fffef8"
-      });
-      dataUrl = c.toDataURL("image/png", 0.9);
-    } catch (e) { console.error("html2canvas failed:", e); }
-  }
+  // Sync latest text from DOM into boxes first
+  boxes.forEach(box => {
+    const el = cv.querySelector(`.ann-box[data-id="${box.id}"] .ann-box-text`);
+    if (el) box.text = el.innerText || el.textContent || "";
+  });
 
-  // Restore selection
-  selectedId = prevSel;
-  renderCanvas();
-  return dataUrl;
+  // Canvas dimensions matching the poster div
+  const W = cv.offsetWidth  || 560;
+  const H = cv.offsetHeight || 792;
+
+  const c   = document.createElement("canvas");
+  c.width   = W;
+  c.height  = H;
+  const ctx = c.getContext("2d");
+
+  // Background
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, W, H);
+
+  // Draw each text box
+  boxes.forEach(box => {
+    const fontSize   = box.fontSize   || 36;
+    const fontFamily = (box.fontFamily || "'Pacifico',cursive").replace(/'/g, "");
+    const color      = box.color      || "#1a1a1a";
+    const align      = box.align      || "center";
+    const x          = box.x          || 0;
+    const y          = box.y          || 0;
+    const width      = box.width      || W - 80;
+    const text       = (box.text      || "").replace(/<[^>]*>/g, ""); // strip any HTML tags
+
+    ctx.font      = `${fontSize}px ${fontFamily}, sans-serif`;
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+
+    // x origin for textAlign
+    const drawX = align === "center" ? x + width / 2
+                : align === "right"  ? x + width
+                : x + 8;
+
+    // Word-wrap
+    const words    = text.split(" ");
+    const maxW     = width - 16;
+    let   line     = "";
+    let   lineY    = y + fontSize + 14; // top padding
+    const lineH    = fontSize * 1.4;
+
+    words.forEach(word => {
+      const test = line ? line + " " + word : word;
+      if (ctx.measureText(test).width > maxW && line) {
+        ctx.fillText(line, drawX, lineY);
+        line  = word;
+        lineY += lineH;
+      } else {
+        line = test;
+      }
+    });
+    if (line) ctx.fillText(line, drawX, lineY);
+  });
+
+  return c.toDataURL("image/png", 0.92);
 }
 
 // ── Upload (publish) announcement ─────────────────────────────────
@@ -454,13 +495,22 @@ async function uploadAnnouncement() {
   const btn     = document.getElementById("annUploadBtn");
 
   btn.disabled    = true;
-  btn.textContent = "Uploading…";
+  btn.textContent = "Saving…";
 
-  // Sync latest text content from DOM into boxes array
+  // 1. Sync text from DOM into boxes
   boxes.forEach(box => {
     const el = document.querySelector(`.ann-box[data-id="${box.id}"] .ann-box-text`);
-    if (el) box.text = el.innerHTML;
+    if (el) box.text = el.innerText || el.textContent || "";
   });
+
+  // 2. Generate preview PNG FIRST (before any async Firestore call)
+  btn.textContent = "Generating preview…";
+  let previewData = null;
+  try {
+    previewData = await capturePreview();
+  } catch (e) {
+    console.error("Preview generation failed:", e);
+  }
 
   const projectData = {
     title,
@@ -468,9 +518,12 @@ async function uploadAnnouncement() {
     boxes: boxes.map(b => ({ ...b }))
   };
 
+  btn.textContent = "Uploading…";
+
   try {
     let docId = editingId;
 
+    // 3. Save/update Firestore doc
     if (!docId) {
       const r = await addDoc(collection(db, "announcements"), {
         ...projectData,
@@ -480,35 +533,37 @@ async function uploadAnnouncement() {
         updatedAt:  serverTimestamp(),
         createdBy:  user.uid
       });
-      docId    = r.id;
+      docId     = r.id;
       editingId = docId;
     } else {
       await setDoc(doc(db, "announcements", docId), {
         ...projectData,
-        published:  true,
-        updatedAt:  serverTimestamp()
+        published: true,
+        updatedAt: serverTimestamp()
       }, { merge: true });
     }
 
-    // Generate + upload preview PNG
-    const previewData = await capturePreview();
+    // 4. Upload preview PNG to Firebase Storage
     if (previewData) {
+      btn.textContent = "Uploading preview…";
       const pRef = sRef(storage, `announcements/${docId}/preview.png`);
       await uploadString(pRef, previewData, "data_url");
       const previewUrl = await getDownloadURL(pRef);
-      await setDoc(doc(db, "announcements", docId), { previewUrl }, { merge: true });
+      await setDoc(doc(db, "announcements", docId),
+        { previewUrl }, { merge: true });
     }
 
-    btn.textContent = "✅ Uploaded!";
+    // 5. Done
+    btn.textContent = "✅ Done!";
     setTimeout(() => {
       btn.disabled    = false;
       btn.textContent = "📤 Upload";
       closeEditor();
-    }, 900);
+    }, 800);
 
   } catch (e) {
     console.error("Upload failed:", e);
-    alert("Upload failed — check browser console for details.");
+    alert("Upload failed — error: " + e.message);
     btn.disabled    = false;
     btn.textContent = "📤 Upload";
   }

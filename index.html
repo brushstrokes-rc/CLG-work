@@ -109,7 +109,7 @@ document.documentElement.dataset.theme=__t;
       <a href="#attendance" data-view="attendance">Attendance</a>
       <a href="#events" data-view="events">Events</a>
       <a href="#core-members" data-view="coremembers">Core Members</a>
-      <a href="#info" data-view="home">Info</a>
+      <a href="#info" data-view="info">Info</a>
       <a href="#announcements" data-view="announcements">Announcements</a>
     </nav>
 
@@ -335,6 +335,40 @@ document.documentElement.dataset.theme=__t;
       </div>
       <!-- CORE MEMBERS: sirf EK container, <main> ke andar (Home / Attendance ke andar nahi) -->
       <div id="core-members-view" style="display:none;"></div>
+
+      <!-- INFO PAGE -->
+      <div id="viewInfo" hidden>
+        <div class="ann-page-header">
+          <h2 class="sec-title">ℹ️ Info</h2>
+          <button class="ann-add-btn" id="infoAddBtn">✏️ Add Post</button>
+        </div>
+
+        <!-- Add post form (hidden by default) -->
+        <div id="infoFormWrap" hidden>
+          <form id="infoForm" class="info-form">
+            <div class="info-form-field">
+              <label class="info-lbl">Title (optional)</label>
+              <input type="text" id="infoTitle" class="info-input" placeholder="e.g. Club Timings, Rules…">
+            </div>
+            <div class="info-form-field">
+              <label class="info-lbl">Text / Paragraph</label>
+              <textarea id="infoText" class="info-textarea" rows="6"
+                placeholder="Write your info here…"></textarea>
+            </div>
+            <div class="info-form-field">
+              <label class="info-lbl">Images (up to 6)</label>
+              <input type="file" id="infoImages" accept="image/*" multiple class="info-file-inp">
+              <span class="info-hint" id="infoImgHint">Up to 6 images</span>
+            </div>
+            <div class="ev-row">
+              <button type="submit" class="ev-btn">Post</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Posts list -->
+        <div id="infoPostsList"></div>
+      </div>
 
       <!-- ANNOUNCEMENTS PAGE -->
       <div id="viewAnnouncements" hidden>

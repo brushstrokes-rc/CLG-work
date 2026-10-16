@@ -22,7 +22,8 @@ function showApp(view, clicked) {
     attendancesummary: "viewAttendanceSummary",
     events: "viewEvents",
     coremembers: "core-members-view",
-    announcements: "viewAnnouncements"
+    announcements: "viewAnnouncements",
+    info: "viewInfo"
   };
 
   Object.entries(pages).forEach(function ([key, id]) {

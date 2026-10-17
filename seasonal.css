@@ -1,0 +1,75 @@
+/* ================= seasonal.css — HALLOWEEN theme =================
+   Kaise lagayein : index.html <head> me SABSE LAST css ke baad ye line jodo:
+                      <link rel="stylesheet" href="seasonal.css">
+                    aur </body> se pehle:  <script src="seasonal.js" defer></script>
+   Kaise hatayein : in dono lines ko hata do (aur chaho to files delete kar do). Bas.
+   Safety        : decoration sabse peeche (z-index:-1) rehti hai aur click nahi rokti, isliye
+                   buttons / text / forms ke upar kabhi nahi aati. Data ko ye file chhooti nahi. */
+
+/* ---------- rang (light) ---------- */
+:root[data-season="halloween"]:not([data-theme="dark"]){
+  --s-brand:#b8420b; --s-brand-dark:#8a2f06; --s-accent:#e8590c;
+  --s-header:#1b1030; --s-quote:#2a1740;
+  --s-sand:#f0b27a; --s-line:#f3dfc8; --s-card-hover:#fde8d2;
+}
+/* ---------- rang (dark) ---------- */
+:root[data-season="halloween"][data-theme="dark"]{
+  --s-brand:#ff9f43; --s-brand-dark:#ffb86b; --s-accent:#b36bff;
+  --s-header:#0e0716; --s-quote:#1f1233;
+  --s-page:#0c0713; --s-card:#190f26; --s-card-hover:#2d1c45;
+  --s-sand:#3b2455; --s-line:#35204d; --s-text:#efe6f7; --s-muted:#b7a6cc;
+}
+
+/* ---------- peeche wali decoration dikhne ke liye page ka rang html par rehta hai, body transparent ---------- */
+html[data-season="halloween"] body{background:transparent!important;background-image:none!important}
+html[data-season="halloween"][data-theme="dark"]{background-image:
+  repeating-linear-gradient(45deg,rgba(255,255,255,.025) 0 2px,transparent 2px 5px),
+  repeating-linear-gradient(-45deg,rgba(255,255,255,.025) 0 2px,transparent 2px 5px)}
+/* Core Members ka light page bhi transparent (dark me wo apna light panel hi rehta hai) */
+html[data-season="halloween"]:not([data-theme="dark"]) #core-members-view,
+html[data-season="halloween"]:not([data-theme="dark"]) #cm-view-page{background:transparent}
+
+/* ---------- navbar / footer ki border: candy-corn patti (jagah ke andar, kuch cover nahi karti) ---------- */
+html[data-season="halloween"] .app-nav{background:#2a1740;border-bottom:4px solid transparent;
+  border-image:repeating-linear-gradient(90deg,#ff7a18 0 16px,#ffc233 16px 32px,#f5e6c8 32px 48px) 1}
+html[data-season="halloween"] .app-footer{background:#2a1740;border-top:4px solid transparent;
+  border-image:repeating-linear-gradient(90deg,#ff7a18 0 16px,#7b3fe4 16px 32px,#1b1030 32px 48px) 1}
+/* header me halke taare (text ke peeche, bahut halke) */
+html[data-season="halloween"] .app-header{background-image:radial-gradient(circle,rgba(255,200,120,.35) 1px,transparent 1.6px);background-size:46px 46px}
+
+/* ---------- peeche ki layer (seasonal.js banata hai) ---------- */
+.bs-season-layer{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;user-select:none;-webkit-user-select:none}
+.bs-glow{position:absolute;inset:0;
+  background:radial-gradient(ellipse 80% 40% at 50% 108%,rgba(255,122,24,.22),transparent 70%),
+             radial-gradient(ellipse 60% 30% at 8% 100%,rgba(123,63,228,.16),transparent 70%)}
+:root[data-theme="dark"] .bs-glow{
+  background:radial-gradient(ellipse 80% 45% at 50% 108%,rgba(255,122,24,.30),transparent 70%),
+             radial-gradient(ellipse 60% 35% at 8% 100%,rgba(123,63,228,.28),transparent 70%)}
+.bs-moon{position:absolute;right:5vw;top:170px;width:64px;height:64px;border-radius:50%;opacity:.5;
+  background:radial-gradient(circle at 35% 35%,#fff7d6,#ffd98a 60%,#f5b94a);box-shadow:0 0 40px 12px rgba(255,200,90,.35)}
+.bs-ground{position:absolute;left:0;right:0;bottom:0;height:96px;opacity:.16;
+  background:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%20480%2096%27%3E%3Cg%20fill=%27%23241038%27%3E%3Cpath%20d=%27M0%2096V72c60-18%20120-18%20180%200s120%2018%20180-4%2090-14%20120%200v28z%27/%3E%3Cpath%20d=%27M60%2072V50a10%2010%200%200%201%2020%200v22z%27/%3E%3Cpath%20d=%27M96%2076V60a8%208%200%200%201%2016%200v16z%27/%3E%3Cpath%20d=%27M300%2070V44a11%2011%200%200%201%2022%200v26z%27/%3E%3C/g%3E%3Cg%20stroke=%27%23241038%27%20stroke-width=%273%27%20fill=%27none%27%20stroke-linecap=%27round%27%3E%3Cpath%20d=%27M400%2070c-2-14-4-26-10-38M392%2044l-14-10M394%2054l14-12M396%2034l-2-14%27/%3E%3C/g%3E%3C/svg%3E") repeat-x left bottom/480px 96px}
+:root[data-theme="dark"] .bs-ground{opacity:.55}
+
+.bs-p{position:absolute;line-height:1;will-change:transform;filter:drop-shadow(0 2px 3px rgba(0,0,0,.25))}
+.bs-bat{left:0;animation:bs-fly var(--dur) linear var(--delay) infinite}
+.bs-ghost{animation:bs-rise var(--dur) ease-in-out var(--delay) infinite}
+.bs-pumpkin{animation:bs-bob var(--dur) ease-in-out var(--delay) infinite alternate}
+@keyframes bs-fly{
+  0%{transform:translate3d(var(--x0),0,0) scaleX(var(--flip))}
+  50%{transform:translate3d(calc((var(--x0) + var(--x1)) / 2),var(--dy),0) scaleX(var(--flip))}
+  100%{transform:translate3d(var(--x1),0,0) scaleX(var(--flip))}}
+@keyframes bs-rise{
+  0%{transform:translate3d(0,0,0);opacity:0}
+  10%{opacity:.5}
+  50%{transform:translate3d(var(--sway),-55vh,0)}
+  90%{opacity:.5}
+  100%{transform:translate3d(0,-115vh,0);opacity:0}}
+@keyframes bs-bob{from{transform:translateY(0) rotate(-6deg)}to{transform:translateY(-8px) rotate(6deg)}}
+
+.bs-paused .bs-p{animation-play-state:paused}
+@media (prefers-reduced-motion:reduce){
+  .bs-p{animation:none!important}
+  .bs-bat{left:var(--sx)!important}
+  .bs-ghost{display:none}
+}

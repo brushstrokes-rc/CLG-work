@@ -12,6 +12,10 @@ import { getApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.j
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
+// Core Members session patterns
+const RE_CM_EVENT  = /^(\d{4}-\d{2}-\d{2})_(offline|online)_cm_[a-z0-9]+$/;
+const RE_CM_LEGACY = /^(\d{4}-\d{2}-\d{2})$/;
+
 const auth = getAuth(getApp());
 const db   = getFirestore(getApp());
 
@@ -133,15 +137,108 @@ function matchesQuery(s, q) {
 }
 // </pure>
 
+// Build sessions from core-attendance Firestore docs.
+// Each member's status is inside doc.members: [{name, status}].
+// New doc ids:    "yyyy-mm-dd_online_cm_<stamp>"   (saved sessions)
+// Legacy doc ids: "yyyy-mm-dd"                     (old single-per-date docs)
+// Draft sessions from localStorage (key "bs-core-drafts-v2") are also included.
+function buildCoreSessions(docs) {
+  const all = [];
+  const seenLegacyDates = new Set();
+
+  // 1. New saved sessions
+  Object.keys(docs).forEach(function (id) {
+    const m = id.match(RE_CM_EVENT);
+    if (!m) return;
+    const dateKey = m[1], mode = m[2];
+    const d = docs[id];
+    const marks = Object.create(null);
+    let n = 0;
+    (d.members || []).forEach(function (mem) {
+      if (!mem || !mem.name) return;
+      const st = normStatus(mem.status);
+      if (st) { marks[mem.name] = st; n++; }
+      // absent is inferred — don't store, handled by statusOf()
+    });
+    all.push({ id: id, date: dateKey, mode: mode,
+               title: d.title || "", marks: marks, markCount: n,
+               createdAt: d.savedAt ? new Date(d.savedAt).getTime() : 0 });
+    seenLegacyDates.add(dateKey);
+  });
+
+  // 2. Legacy docs ("yyyy-mm-dd") — keep only if no new session for that date
+  Object.keys(docs).forEach(function (id) {
+    if (!RE_CM_LEGACY.test(id)) return;
+    if (seenLegacyDates.has(id)) return;   // new session already covers this date
+    const d = docs[id];
+    const marks = Object.create(null);
+    let n = 0;
+    (d.members || []).forEach(function (mem) {
+      if (!mem || !mem.name) return;
+      const st = normStatus(mem.status);
+      if (st) { marks[mem.name] = st; n++; }
+    });
+    const mode = d.mode || "offline";
+    all.push({ id: id, date: id, mode: mode,
+               title: d.title || "", marks: marks, markCount: n,
+               createdAt: d.savedAt ? new Date(d.savedAt).getTime() : 0 });
+  });
+
+  // 3. Draft sessions from localStorage (bs-core-drafts-v2)
+  try {
+    const raw = localStorage.getItem("bs-core-drafts-v2");
+    const drafts = raw ? JSON.parse(raw) : {};
+    if (drafts && typeof drafts === "object") {
+      Object.keys(drafts).forEach(function (dk) {
+        const draft = drafts[dk];
+        if (!draft || !draft.dateKey) return;
+        // Skip if this draft key matches a saved Firestore session id (it's an unsaved edit)
+        if (docs[dk]) return;
+        const state = draft.state || {};
+        const marks = Object.create(null);
+        let n = 0;
+        Object.keys(state).forEach(function (name) {
+          const st = normStatus(state[name]);
+          if (st) { marks[name] = st; n++; }
+        });
+        // Only count draft if at least one member was ticked
+        if (n === 0 && !COUNT_EMPTY_SESSIONS) return;
+        all.push({ id: dk, date: draft.dateKey, mode: draft.mode || "offline",
+                   title: draft.title || "", marks: marks, markCount: n,
+                   createdAt: draft.t || 0 });
+      });
+    }
+  } catch (e) { /* localStorage unavailable */ }
+
+  // Sort newest first, deduplicate by exact signature
+  all.sort(function (a, b) {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return b.createdAt - a.createdAt;
+  });
+  const seen = {}, out = [];
+  all.forEach(function (s) {
+    if (!COUNT_EMPTY_SESSIONS && s.markCount === 0) return;
+    const sig = [s.date, s.mode, s.title.toLowerCase(),
+      Object.keys(s.marks).sort().map(function (k) { return k + "=" + s.marks[k]; }).join(",")].join("|");
+    if (seen[sig]) return;
+    seen[sig] = true;
+    out.push(s);
+  });
+  return out;
+}
+
 // ============================== UI ==============================
 const $ = function (id) { return document.getElementById(id); };
 const APP_VIEWS = ["viewHome", "viewAttendance", "viewAttendanceSummary", "viewEvents"];
 const MY_VIEWS  = ["viewStudentProfile", "viewStudentRecords"];
 
-let sessions  = [];
-let loaded    = false;
-let loadError = false;
-let unsub     = null;
+let sessions      = [];   // main attendance sessions (from "attendance" collection)
+let coreSessions  = [];   // core members sessions (from "core-attendance" collection)
+let loaded        = false;
+let coreLoaded    = false;
+let loadError     = false;
+let unsub         = null;
+let coreUnsub     = null;
 const cur = { name: "", status: "present", origin: "attendance" };
 
 function make(tag, cls, text) {
@@ -176,21 +273,74 @@ window.addEventListener("bs:enter", hideMine);
 // ---------- data ----------
 function startListener() {
   if (unsub) return;
+
+  // Main attendance listener
   unsub = onSnapshot(collection(db, "attendance"), function (snap) {
     const docs = {};
     snap.forEach(function (d) { docs[d.id] = d.data(); });
     sessions  = buildSessions(docs);
     loaded    = true;
     loadError = false;
+    rebuildCombined();
     refresh();
   }, function (err) {
     console.error("Student profile: attendance read failed:", err.code || err);
     unsub = null; loadError = true; refresh();
   });
+
+  // Core Members listener
+  if (!coreUnsub) {
+    coreUnsub = onSnapshot(collection(db, "core-attendance"), function (snap) {
+      const docs = {};
+      snap.forEach(function (d) { docs[d.id] = d.data(); });
+      coreSessions = buildCoreSessions(docs);
+      coreLoaded   = true;
+      rebuildCombined();
+      refresh();
+    }, function (err) {
+      console.warn("Student profile: core-attendance read failed:", err.code || err);
+      coreUnsub = null; coreLoaded = true; // treat as empty, don't block
+      rebuildCombined();
+      refresh();
+    });
+  }
 }
+// combinedSessions = main attendance + core members, merged and deduplicated
+// We keep them in a single array so renderProfile / renderRecords work unchanged.
+let combinedSessions = [];
+
+function rebuildCombined() {
+  // Both lists are already individually deduplicated.
+  // Merge: a core-members session has a unique id starting with a date and containing "_cm_"
+  // or a legacy "yyyy-mm-dd" from core-attendance. Main attendance ids never contain "_cm_".
+  // So there is no overlap between the two id spaces — just concat.
+  // Then deduplicate by exact signature (same date + mode + title + marks).
+  const all = sessions.concat(coreSessions);
+  const seen = {}, out = [];
+  all.forEach(function (s) {
+    if (!COUNT_EMPTY_SESSIONS && s.markCount === 0) return;
+    const sig = [s.date, s.mode, (s.title || "").toLowerCase(),
+      Object.keys(s.marks).sort().map(function (k) { return k + "=" + s.marks[k]; }).join(",")].join("|");
+    if (seen[sig]) return;
+    seen[sig] = true;
+    out.push(s);
+  });
+  out.sort(function (a, b) {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    if ((a.createdAt || 0) !== (b.createdAt || 0)) return (b.createdAt || 0) - (a.createdAt || 0);
+    return a.id < b.id ? 1 : -1;
+  });
+  combinedSessions = out;
+}
+
 onAuthStateChanged(auth, function (user) {
   if (user) startListener();
-  else { if (unsub) { unsub(); unsub = null; } loaded = false; sessions = []; }
+  else {
+    if (unsub)     { unsub();     unsub     = null; }
+    if (coreUnsub) { coreUnsub(); coreUnsub = null; }
+    loaded = false; coreLoaded = false;
+    sessions = []; coreSessions = []; combinedSessions = [];
+  }
 });
 
 function refresh() {
@@ -297,15 +447,15 @@ function renderProfile() {
   chart.replaceChildren();
 
   if (loadError) { sub.textContent = "Couldn't load attendance."; note.textContent = "Check your connection and try again."; setBoxes(null, 0); return; }
-  if (!loaded)   { sub.textContent = "Loading attendance…"; note.textContent = ""; setBoxes(null, 0); return; }
+  if (!loaded && !coreLoaded) { sub.textContent = "Loading attendance…"; note.textContent = ""; setBoxes(null, 0); return; }
 
-  const rec = recordsFor(sessions, name);
+  const rec = recordsFor(combinedSessions, name);
   const counts = { present: rec.present.length, half: rec.half.length, absent: rec.absent.length };
-  const total = sessions.length;
+  const total = combinedSessions.length;
 
   sub.textContent  = total ? "Based on " + total + " attendance session" + (total === 1 ? "" : "s")
                            : "No attendance has been taken yet";
-  note.textContent = total ? "Dates with no attendance are not counted." : "";
+  note.textContent = total ? "Includes Main Attendance and Core Members sessions." : "";
   chart.appendChild(pieSVG(counts, total, name));
   setBoxes(counts, total);
 }
@@ -323,7 +473,7 @@ function setBoxes(counts, total) {
 let sgItems = [], sgIdx = -1;
 
 function currentList() {
-  return loaded ? recordsFor(sessions, cur.name)[cur.status] : [];
+  return (loaded || coreLoaded) ? recordsFor(combinedSessions, cur.name)[cur.status] : [];
 }
 
 function renderRecords() {
@@ -343,8 +493,8 @@ function renderRecords() {
   empty.replaceChildren();
   empty.hidden = true;
 
-  if (loadError) { count.textContent = ""; showEmpty("Couldn't load attendance. Check your connection and try again."); return; }
-  if (!loaded)   { count.textContent = ""; showEmpty("Loading…"); return; }
+  if (loadError)              { count.textContent = ""; showEmpty("Couldn't load attendance. Check your connection and try again."); return; }
+  if (!loaded && !coreLoaded) { count.textContent = ""; showEmpty("Loading…"); return; }
 
   count.textContent = q
     ? "Showing " + list.length + " of " + all.length + " record" + (all.length === 1 ? "" : "s")
@@ -449,3 +599,8 @@ $("srClear").addEventListener("click", clearSearch);
 document.addEventListener("click", function (e) {
   if (!e.target.closest(".sr-search")) closeSuggest();
 });
+
+// Expose so Core-members-view.js name clicks open the same stats page
+window.bsOpenStudentProfile = function (name) {
+  openProfile(name, "attendance");
+};

@@ -316,7 +316,9 @@ function buildTable() {
     nameCell.className = "student-name";
     nameCell.style.cursor = "pointer";
     nameCell.title = "Click to see attendance stats";
-    nameCell.addEventListener("click", function () { bsShowStudentStats(name); });
+    nameCell.addEventListener("click", function () {
+      if (typeof window.bsOpenStudentProfile === "function") window.bsOpenStudentProfile(name);
+    });
 
     const presentCell = document.createElement("td");
     presentCell.className = "status-cell present-cell";
@@ -1248,147 +1250,6 @@ function scrollToStudent(name) {
     dot.remove();
   }, 3000);
 }
-
-// ── STUDENT STATS (Main Attendance sessions + Core Members sessions combined) ──
-
-// Returns { present, half, absent, total } counts across ALL distinct sessions
-// for a given student name. Called from here AND from Core-members-view.js.
-window.bsGetStudentStats = function (name) {
-  var p = 0, h = 0, a = 0;
-
-  // 1. Main Attendance DRAFTS (sessions object: one per date+mode)
-  Object.keys(sessions).forEach(function (k) {
-    var s = sessions[k];
-    var status = s.marks[name];
-    if (status === "present") p++;
-    else if (status === "half") h++;
-    else a++;   // unticked = absent
-  });
-
-  // 2. Main Attendance SAVED EVENTS (eventDocs array)
-  eventDocs.forEach(function (s) {
-    var status = s.marks[name];
-    if (status === "present") p++;
-    else if (status === "half") h++;
-    else a++;
-  });
-
-  // 3. Core Members sessions (drafts + saved) — provided by Core-members-view.js
-  if (typeof window.cmGetMemberSessionsFor === "function") {
-    var cmSessions = window.cmGetMemberSessionsFor(name);
-    cmSessions.forEach(function (status) {
-      if (status === "present") p++;
-      else if (status === "half") h++;
-      else a++;
-    });
-  }
-
-  return { present: p, half: h, absent: a, total: p + h + a };
-};
-
-// Show the stats popup (same UI from both navbars)
-window.bsShowStudentStats = function (name, optStats) {
-  var stats = optStats || window.bsGetStudentStats(name);
-  var total = stats.total;
-
-  function pct(n) {
-    if (total === 0) return "0%";
-    return Math.round((n / total) * 100) + "%";
-  }
-
-  var old = document.getElementById("bsStatsOverlay");
-  if (old) old.remove();
-
-  var overlay = document.createElement("div");
-  overlay.id = "bsStatsOverlay";
-  overlay.style.cssText = [
-    "position:fixed;inset:0;z-index:300",
-    "display:flex;align-items:center;justify-content:center",
-    "background:rgba(0,0,0,.55);padding:16px"
-  ].join(";");
-
-  var box = document.createElement("div");
-  box.style.cssText = [
-    "background:#fff;color:#222;border-radius:18px",
-    "padding:28px 26px 22px;max-width:340px;width:100%",
-    "box-shadow:0 8px 32px rgba(0,0,0,.28);font-family:Segoe UI,Arial,sans-serif"
-  ].join(";");
-
-  // Title
-  var title = document.createElement("h3");
-  title.textContent = name;
-  title.style.cssText = "margin:0 0 4px;font-size:17px;color:#6b1020;font-weight:700";
-  box.appendChild(title);
-
-  var sub = document.createElement("p");
-  sub.textContent = "Attendance across " + total + (total === 1 ? " session" : " sessions");
-  sub.style.cssText = "margin:0 0 18px;font-size:13px;color:#888";
-  box.appendChild(sub);
-
-  // Rows
-  var rows = [
-    { label: "Present",      count: stats.present, color: "#2e7d32" },
-    { label: "Half Present", count: stats.half,    color: "#1d6fd8" },
-    { label: "Absent",       count: stats.absent,  color: "#c0392b" }
-  ];
-  rows.forEach(function (r) {
-    var row = document.createElement("div");
-    row.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:10px";
-
-    var label = document.createElement("span");
-    label.textContent = r.label;
-    label.style.cssText = "font-size:15px;font-weight:600;color:" + r.color;
-
-    var right = document.createElement("span");
-    right.style.cssText = "display:flex;gap:10px;align-items:center";
-
-    var sessions_span = document.createElement("span");
-    sessions_span.textContent = r.count + (r.count === 1 ? " session" : " sessions");
-    sessions_span.style.cssText = "font-size:14px;color:#444";
-
-    var pct_span = document.createElement("span");
-    pct_span.textContent = pct(r.count);
-    pct_span.style.cssText = [
-      "font-size:14px;font-weight:700;min-width:42px;text-align:right",
-      "color:" + r.color
-    ].join(";");
-
-    right.appendChild(sessions_span);
-    right.appendChild(pct_span);
-    row.appendChild(label);
-    row.appendChild(right);
-    box.appendChild(row);
-
-    // Progress bar
-    var bar = document.createElement("div");
-    bar.style.cssText = "height:6px;background:#eee;border-radius:4px;margin-bottom:14px";
-    var fill = document.createElement("div");
-    fill.style.cssText = [
-      "height:6px;border-radius:4px",
-      "background:" + r.color,
-      "width:" + pct(r.count)
-    ].join(";");
-    bar.appendChild(fill);
-    box.appendChild(bar);
-  });
-
-  var closeBtn = document.createElement("button");
-  closeBtn.textContent = "Close";
-  closeBtn.type = "button";
-  closeBtn.style.cssText = [
-    "margin-top:6px;width:100%;padding:11px 0;border:none",
-    "border-radius:10px;background:#6b1020;color:#fff",
-    "font-size:15px;font-weight:700;cursor:pointer"
-  ].join(";");
-  closeBtn.addEventListener("click", function () { overlay.remove(); });
-  box.appendChild(closeBtn);
-
-  overlay.appendChild(box);
-  overlay.addEventListener("click", function (e) {
-    if (e.target === overlay) overlay.remove();
-  });
-  document.body.appendChild(overlay);
-};
 
 // Init call
 initSearchBar();

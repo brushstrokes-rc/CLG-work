@@ -1,5 +1,5 @@
 import { initializeApp,getApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+import { getAuth, initializeAuth, inMemoryPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, deleteField }
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
@@ -13,7 +13,9 @@ const firebaseConfig = {
   appId: "1:684392264786:web:155f9a259161c036995b8b"
 };  
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+// Login session sirf memory me rehta hai (browser storage me save nahi hota), isliye
+// har reload / dobara open par login page aata hai. Kuch bhi Firestore ya Auth me delete nahi hota.
+const auth = initializeAuth(app, { persistence: inMemoryPersistence });
 const db = getFirestore(getApp());
 const toEmail = u => `${u.trim().toLowerCase().replace(/\s+/g, "")}@brushstrokes.app`;
 // ---------- Account storage (one account per device) ----------
@@ -83,7 +85,7 @@ const students = [
   "Rudransh Tilwankar",
   "Maitree Nirwal",
   "Arsh",
-  "Shahnaz",
+  "Shahnaz Ahmad",
   "Kanishka Singh",
   "Ayush Shekhar",
   "Afsha Hussain",
@@ -113,6 +115,11 @@ const students = [
 //   "2026-09-29_online_ev_xxxx"                 -> Save dabane par bana EK event (ek din me jitne chaho):
 //                                                  { "Rupam Nama": "present" | "half", _title, _createdAt }
 //   "2026-09-24" (purana format, bina mode ke)  -> Offline draft maana jata hai
+// Naam ek jaisa rakhne ke liye: purani spelling jo Firestore ke purane records me hai -> sahi naam.
+// Purane records delete/badle nahi jaate; padhte waqt naya naam maana jata hai.
+const NAME_ALIASES = { "Shahnaz": "Shahnaz Ahmad", "Shaksham Katiyar": "Saksham Katiyar" };
+function canonName(n) { return Object.prototype.hasOwnProperty.call(NAME_ALIASES, n) ? NAME_ALIASES[n] : n; }
+function legacyKeysFor(n) { return Object.keys(NAME_ALIASES).filter(function (k) { return NAME_ALIASES[k] === n; }); }
 let rawDocs = {};            // docId -> Firestore data
 let sessions = {};           // drafts: "yyyy-mm-dd|offline" -> { id, date, mode, title, marks, createdAt }
 let eventDocs = [];          // Save se bane events: { id, date, mode, title, marks, createdAt }
@@ -128,7 +135,10 @@ function makeSession(id, date, mode) {
   const d = rawDocs[id] || {};
   const marks = {};
   Object.keys(d).forEach(function (k) {
-    if (d[k] === "present" || d[k] === "half") marks[k] = d[k];
+    if (d[k] === "present" || d[k] === "half") {
+      const nk = canonName(k);   // purani spelling ho to naya naam; naya naam doc me ho to wahi jeetta hai
+      if (nk === k || !(nk in d)) marks[nk] = d[k];
+    }
   });
   return {
     id: id, date: date, mode: mode,
@@ -365,14 +375,17 @@ attendanceBody.addEventListener("click", async function (e) {
   if (!rawDocs[id]) rawDocs[id] = {};
   if (isUndo) delete rawDocs[id][name];
   else rawDocs[id][name] = status;
+  legacyKeysFor(name).forEach(function (k) { delete rawDocs[id][k]; });   // purani spelling ki mark ab naye naam me chali gayi
 
   buildSessions();
   renderAll();
 
   try {
+    const markPayload = { [name]: isUndo ? deleteField() : status };
+    legacyKeysFor(name).forEach(function (k) { markPayload[k] = deleteField(); });
     await setDoc(
       doc(db, "attendance", id),
-      { [name]: isUndo ? deleteField() : status },
+      markPayload,
       { merge: true }
     );
   } catch (err) {
@@ -716,6 +729,8 @@ async function updateEditedEvent() {
   Object.keys(ed.marks).forEach(function (n) { payload[n] = ed.marks[n]; });
   Object.keys(ed.orig).forEach(function (n) { if (!(n in ed.marks)) payload[n] = deleteField(); });
   payload._title = value;
+  // purani spelling wali key (jaise "Shahnaz") hatao; uski mark naye naam ke saath payload me already hai
+  Object.keys(NAME_ALIASES).forEach(function (k) { if (rawDocs[ed.id] && k in rawDocs[ed.id]) payload[k] = deleteField(); });
 
   saveTitleBtn.disabled = true;
   try {
@@ -730,6 +745,7 @@ async function updateEditedEvent() {
 
   // screen par turant dikhao
   const raw = rawDocs[ed.id] || (rawDocs[ed.id] = {});
+  Object.keys(NAME_ALIASES).forEach(function (k) { delete raw[k]; });
   Object.keys(ed.orig).forEach(function (n) { if (!(n in ed.marks)) delete raw[n]; });
   Object.keys(ed.marks).forEach(function (n) { raw[n] = ed.marks[n]; });
   raw._title = value;
@@ -1023,6 +1039,10 @@ signupForm.addEventListener("submit", async function (e) {
   signupMessage.className = "success";
   try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
 
+  // createUser ke baad Firebase user ko apne aap sign-in kar deta hai; app seedha na khule,
+  // isliye profile save hone ke baad sign-out karke login page par bhejte hain.
+  try { await signOut(auth); } catch (err) { console.error("Sign out after signup failed:", err); }
+
   signupSection.classList.add("hidden");
   loginSection.classList.remove("hidden");
 });
@@ -1032,7 +1052,7 @@ signupSection.classList.add("hidden");
 loginSection.classList.add("hidden");
 
 // Flow:
-//   Active session (reload/reopen)  → seedha app kholo
+//   Reload/reopen par session nahi hota (in-memory)  → app sirf login form ke baad khulta hai
 //   No session + pehle account tha  → login page
 //   No session + naya device        → signup page
 let appLaunched = false;
@@ -1041,11 +1061,8 @@ onAuthStateChanged(auth, function (user) {
   if (appLaunched) return;
 
   if (user) {
-    // Session active — seedha app
-    appLaunched = true;
-    try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
-    startAttendanceListener();
-    window.dispatchEvent(new Event("bs:enter"));
+    // App yahan se kabhi nahi khulta. Sirf login form (sahi password ke baad) hi app kholta hai.
+    return;
   } else {
     // Session nahi
     var hadAccount = false;
@@ -1057,6 +1074,8 @@ onAuthStateChanged(auth, function (user) {
     }
   }
 });
+// Browser ka back/forward cache purana khula hua app wapas dikha sakta hai; usse bachne ke liye reload
+window.addEventListener("pageshow", function (e) { if (e.persisted) location.reload(); });
 // ---------- Splash screen ----------
 window.addEventListener("load", function () {
   setTimeout(function () {

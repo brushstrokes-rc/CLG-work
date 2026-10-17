@@ -16,6 +16,10 @@ import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/fi
 const RE_CM_EVENT  = /^(\d{4}-\d{2}-\d{2})_(offline|online)_cm_[a-z0-9]+$/;
 const RE_CM_LEGACY = /^(\d{4}-\d{2}-\d{2})$/;
 
+// Same name everywhere: old spellings stored in earlier records count as the correct name (records are not changed).
+const NAME_ALIASES = { "Shahnaz": "Shahnaz Ahmad", "Shaksham Katiyar": "Saksham Katiyar" };
+function canonName(n) { return Object.prototype.hasOwnProperty.call(NAME_ALIASES, n) ? NAME_ALIASES[n] : n; }
+
 const auth = getAuth(getApp());
 const db   = getFirestore(getApp());
 
@@ -51,7 +55,10 @@ function makeSession(id, date, mode, data) {
   Object.keys(data).forEach(function (k) {
     if (k.charAt(0) === "_") return;               // _title, _createdAt
     const st = normStatus(data[k]);
-    if (st) { marks[k] = st; n++; }
+    if (st) {
+      const nk = canonName(k);
+      if (nk === k || !(nk in data)) { marks[nk] = st; n++; }
+    }
   });
   return {
     id: id, date: date, mode: mode,
@@ -157,7 +164,7 @@ function buildCoreSessions(docs) {
     (d.members || []).forEach(function (mem) {
       if (!mem || !mem.name) return;
       const st = normStatus(mem.status);
-      if (st) { marks[mem.name] = st; n++; }
+      if (st) { marks[canonName(mem.name)] = st; n++; }
       // absent is inferred — don't store, handled by statusOf()
     });
     all.push({ id: id, date: dateKey, mode: mode,
@@ -176,7 +183,7 @@ function buildCoreSessions(docs) {
     (d.members || []).forEach(function (mem) {
       if (!mem || !mem.name) return;
       const st = normStatus(mem.status);
-      if (st) { marks[mem.name] = st; n++; }
+      if (st) { marks[canonName(mem.name)] = st; n++; }
     });
     const mode = d.mode || "offline";
     all.push({ id: id, date: id, mode: mode,
@@ -199,7 +206,7 @@ function buildCoreSessions(docs) {
         let n = 0;
         Object.keys(state).forEach(function (name) {
           const st = normStatus(state[name]);
-          if (st) { marks[name] = st; n++; }
+          if (st) { marks[canonName(name)] = st; n++; }
         });
         // Only count draft if at least one member was ticked
         if (n === 0 && !COUNT_EMPTY_SESSIONS) return;

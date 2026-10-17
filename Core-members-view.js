@@ -20,11 +20,15 @@ const CM_MEMBERS = [
   { name: "Shivani",           color: "#e0f5d0", dark: "#3a7a20" },
   { name: "Vaishali Sharma",   color: "#fff0cc", dark: "#a07a10" },
   { name: "Rupam Nama",        color: "#ffe0d0", dark: "#a04020" },
-  { name: "Shaksham Katiyar",  color: "#d8e8ff", dark: "#2040a8" },
+  { name: "Saksham Katiyar",  color: "#d8e8ff", dark: "#2040a8" },
   { name: "Gauransh Rathore",  color: "#e8f5d0", dark: "#507a20" },
 ];
 
 // ── STATE ────────────────────────────────────────────────────────────────────
+// Purani spelling ("Shaksham Katiyar") wale saved records ko naye naam se jodne ke liye; records badalte nahi.
+const CM_ALIASES = { "Shaksham Katiyar": "Saksham Katiyar" };
+function cmCanon(n) { return Object.prototype.hasOwnProperty.call(CM_ALIASES, n) ? CM_ALIASES[n] : n; }
+function cmLegacyNames(n) { return Object.keys(CM_ALIASES).filter(function (k) { return CM_ALIASES[k] === n; }); }
 let cmState = {};
 let cmMode = "online";
 let cmAttPanelVisible = true;
@@ -268,8 +272,9 @@ async function cmLoadDateData(dk, ignoreDraft) {
       document.getElementById("cmOfflineBtn").classList.toggle("active", cmMode === "offline");
       (d.members || []).forEach(m => {
         if (!m || !m.name) return;
-        if (Object.prototype.hasOwnProperty.call(cmState, m.name)) cmState[m.name] = m.status;
-        else cmExtraMembers.push({ name: m.name, status: m.status || "absent" });
+        const nm = cmCanon(m.name);
+        if (Object.prototype.hasOwnProperty.call(cmState, nm)) cmState[nm] = m.status;
+        else cmExtraMembers.push({ name: nm, status: m.status || "absent" });
       });
     } else {
       document.getElementById("cmEventInput").value = "";   // nayi date: purani date ka title na bache
@@ -555,7 +560,9 @@ function cmDraftDelete(dk) {
 function cmApplyDraft(dk) {
   const d = cmDrafts[dk];
   if (!d || !d.state) return false;
-  CM_MEMBERS.forEach(m => { cmState[m.name] = d.state[m.name] || null; });
+  CM_MEMBERS.forEach(m => {
+    cmState[m.name] = d.state[m.name] || cmLegacyNames(m.name).map(k => d.state[k]).find(Boolean) || null;
+  });
   return true;
 }
 

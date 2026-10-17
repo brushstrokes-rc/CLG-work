@@ -1,75 +1,133 @@
-/* ================= seasonal.css — HALLOWEEN theme =================
-   Kaise lagayein : index.html <head> me SABSE LAST css ke baad ye line jodo:
+/* ================= seasonal.css — Halloween / Diwali / Christmas =================
+   Kaise lagayein : index.html <head> me SABSE LAST css ke baad:
                       <link rel="stylesheet" href="seasonal.css">
                     aur </body> se pehle:  <script src="seasonal.js" defer></script>
-   Kaise hatayein : in dono lines ko hata do (aur chaho to files delete kar do). Bas.
-   Safety        : decoration sabse peeche (z-index:-1) rehti hai aur click nahi rokti, isliye
-                   buttons / text / forms ke upar kabhi nahi aati. Data ko ye file chhooti nahi. */
+   Theme badalna  : seasonal.js ke upar  var SEASON = "halloween";  me naam badlo:
+                      "halloween"  |  "diwali"  |  "christmas"  |  ""  (khali = koi theme nahi)
+   Hatana         : dono lines hata do (ya SEASON = ""). Data ko ye file kabhi nahi chhooti.
+   Safety         : decoration sabse peeche (z-index:-1) rehti hai aur click nahi rokti, isliye
+                    buttons / text / forms ke upar kabhi nahi aati. */
 
-/* ---------- rang (light) ---------- */
-:root[data-season="halloween"]:not([data-theme="dark"]){
-  --s-brand:#b8420b; --s-brand-dark:#8a2f06; --s-accent:#e8590c;
-  --s-header:#1b1030; --s-quote:#2a1740;
-  --s-sand:#f0b27a; --s-line:#f3dfc8; --s-card-hover:#fde8d2;
-}
-/* ---------- rang (dark) ---------- */
-:root[data-season="halloween"][data-theme="dark"]{
-  --s-brand:#ff9f43; --s-brand-dark:#ffb86b; --s-accent:#b36bff;
-  --s-header:#0e0716; --s-quote:#1f1233;
-  --s-page:#0c0713; --s-card:#190f26; --s-card-hover:#2d1c45;
-  --s-sand:#3b2455; --s-line:#35204d; --s-text:#efe6f7; --s-muted:#b7a6cc;
-}
-
-/* ---------- peeche wali decoration dikhne ke liye page ka rang html par rehta hai, body transparent ---------- */
-html[data-season="halloween"] body{background:transparent!important;background-image:none!important}
-html[data-season="halloween"][data-theme="dark"]{background-image:
-  repeating-linear-gradient(45deg,rgba(255,255,255,.025) 0 2px,transparent 2px 5px),
-  repeating-linear-gradient(-45deg,rgba(255,255,255,.025) 0 2px,transparent 2px 5px)}
+/* =============================== COMMON =============================== */
+/* peeche wali decoration dikhne ke liye page ka rang html par rehta hai, body transparent */
+html[data-season] body{background:transparent!important;background-image:none!important}
 /* Core Members ka light page bhi transparent (dark me wo apna light panel hi rehta hai) */
-html[data-season="halloween"]:not([data-theme="dark"]) #core-members-view,
-html[data-season="halloween"]:not([data-theme="dark"]) #cm-view-page{background:transparent}
+html[data-season]:not([data-theme="dark"]) #core-members-view,
+html[data-season]:not([data-theme="dark"]) #cm-view-page{background:transparent}
+/* navbar / footer ki border me patti, header me halki dots (kuch cover nahi hota, sab apni jagah ke andar) */
+html[data-season] .app-nav{background:var(--bs-bar);border-bottom:4px solid transparent;border-image-source:var(--bs-stripe);border-image-slice:1}
+html[data-season] .app-footer{background:var(--bs-bar);border-top:4px solid transparent;border-image-source:var(--bs-stripe2);border-image-slice:1}
+html[data-season] .app-header,
+html[data-season][data-theme="dark"] .app-header{background-image:radial-gradient(circle,var(--bs-dot) 1px,transparent 1.6px);background-size:46px 46px}
 
-/* ---------- navbar / footer ki border: candy-corn patti (jagah ke andar, kuch cover nahi karti) ---------- */
-html[data-season="halloween"] .app-nav{background:#2a1740;border-bottom:4px solid transparent;
-  border-image:repeating-linear-gradient(90deg,#ff7a18 0 16px,#ffc233 16px 32px,#f5e6c8 32px 48px) 1}
-html[data-season="halloween"] .app-footer{background:#2a1740;border-top:4px solid transparent;
-  border-image:repeating-linear-gradient(90deg,#ff7a18 0 16px,#7b3fe4 16px 32px,#1b1030 32px 48px) 1}
-/* header me halke taare (text ke peeche, bahut halke) */
-html[data-season="halloween"] .app-header{background-image:radial-gradient(circle,rgba(255,200,120,.35) 1px,transparent 1.6px);background-size:46px 46px}
-
-/* ---------- peeche ki layer (seasonal.js banata hai) ---------- */
+/* peeche ki layer (seasonal.js banata hai) */
 .bs-season-layer{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;user-select:none;-webkit-user-select:none}
-.bs-glow{position:absolute;inset:0;
-  background:radial-gradient(ellipse 80% 40% at 50% 108%,rgba(255,122,24,.22),transparent 70%),
-             radial-gradient(ellipse 60% 30% at 8% 100%,rgba(123,63,228,.16),transparent 70%)}
-:root[data-theme="dark"] .bs-glow{
-  background:radial-gradient(ellipse 80% 45% at 50% 108%,rgba(255,122,24,.30),transparent 70%),
-             radial-gradient(ellipse 60% 35% at 8% 100%,rgba(123,63,228,.28),transparent 70%)}
-.bs-moon{position:absolute;right:5vw;top:170px;width:64px;height:64px;border-radius:50%;opacity:.5;
-  background:radial-gradient(circle at 35% 35%,#fff7d6,#ffd98a 60%,#f5b94a);box-shadow:0 0 40px 12px rgba(255,200,90,.35)}
-.bs-ground{position:absolute;left:0;right:0;bottom:0;height:96px;opacity:.16;
-  background:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%20480%2096%27%3E%3Cg%20fill=%27%23241038%27%3E%3Cpath%20d=%27M0%2096V72c60-18%20120-18%20180%200s120%2018%20180-4%2090-14%20120%200v28z%27/%3E%3Cpath%20d=%27M60%2072V50a10%2010%200%200%201%2020%200v22z%27/%3E%3Cpath%20d=%27M96%2076V60a8%208%200%200%201%2016%200v16z%27/%3E%3Cpath%20d=%27M300%2070V44a11%2011%200%200%201%2022%200v26z%27/%3E%3C/g%3E%3Cg%20stroke=%27%23241038%27%20stroke-width=%273%27%20fill=%27none%27%20stroke-linecap=%27round%27%3E%3Cpath%20d=%27M400%2070c-2-14-4-26-10-38M392%2044l-14-10M394%2054l14-12M396%2034l-2-14%27/%3E%3C/g%3E%3C/svg%3E") repeat-x left bottom/480px 96px}
-:root[data-theme="dark"] .bs-ground{opacity:.55}
+.bs-glow{position:absolute;inset:0;animation:bs-pulse 7s ease-in-out infinite alternate;
+  background:radial-gradient(ellipse 95% 60% at 50% 110%,var(--glow1),transparent 74%),
+             radial-gradient(ellipse 70% 45% at 6% 100%,var(--glow2),transparent 74%),
+             radial-gradient(ellipse 60% 40% at 94% 0%,var(--glow3),transparent 72%)}
+.bs-moon{position:absolute;right:5vw;top:170px;width:64px;height:64px;border-radius:50%;opacity:.55;
+  background:var(--orb-bg);box-shadow:var(--orb-shadow)}
+.bs-ground{position:absolute;left:0;right:0;bottom:0;height:96px;opacity:var(--ground-op);
+  background-repeat:repeat-x;background-position:left bottom;background-size:480px 96px}
 
 .bs-p{position:absolute;line-height:1;will-change:transform;filter:drop-shadow(0 2px 3px rgba(0,0,0,.25))}
-.bs-bat{left:0;animation:bs-fly var(--dur) linear var(--delay) infinite}
-.bs-ghost{animation:bs-rise var(--dur) ease-in-out var(--delay) infinite}
-.bs-pumpkin{animation:bs-bob var(--dur) ease-in-out var(--delay) infinite alternate}
+.bs-fly{left:0;animation:bs-fly var(--dur) linear var(--delay) infinite}
+.bs-rise{animation:bs-rise var(--dur) ease-in-out var(--delay) infinite}
+.bs-fall{animation:bs-fall var(--dur) linear var(--delay) infinite}
+.bs-bob{animation:bs-bob var(--dur) ease-in-out var(--delay) infinite alternate}
+.bs-twinkle{animation:bs-twinkle var(--dur) ease-in-out var(--delay) infinite}
+@keyframes bs-pulse{from{opacity:.8}to{opacity:1}}
 @keyframes bs-fly{
   0%{transform:translate3d(var(--x0),0,0) scaleX(var(--flip))}
   50%{transform:translate3d(calc((var(--x0) + var(--x1)) / 2),var(--dy),0) scaleX(var(--flip))}
   100%{transform:translate3d(var(--x1),0,0) scaleX(var(--flip))}}
 @keyframes bs-rise{
   0%{transform:translate3d(0,0,0);opacity:0}
-  10%{opacity:.5}
+  10%{opacity:.55}
   50%{transform:translate3d(var(--sway),-55vh,0)}
-  90%{opacity:.5}
+  90%{opacity:.55}
   100%{transform:translate3d(0,-115vh,0);opacity:0}}
+@keyframes bs-fall{
+  0%{transform:translate3d(0,-6vh,0) rotate(0deg)}
+  50%{transform:translate3d(var(--sway),50vh,0) rotate(180deg)}
+  100%{transform:translate3d(0,110vh,0) rotate(360deg)}}
 @keyframes bs-bob{from{transform:translateY(0) rotate(-6deg)}to{transform:translateY(-8px) rotate(6deg)}}
+@keyframes bs-twinkle{0%,100%{opacity:.15;transform:scale(.8)}50%{opacity:.9;transform:scale(1.15)}}
 
-.bs-paused .bs-p{animation-play-state:paused}
+.bs-paused .bs-p,.bs-paused .bs-glow{animation-play-state:paused}
 @media (prefers-reduced-motion:reduce){
-  .bs-p{animation:none!important}
-  .bs-bat{left:var(--sx)!important}
-  .bs-ghost{display:none}
+  .bs-p,.bs-glow{animation:none!important}
+  .bs-fly{left:var(--sx)!important}
+  .bs-rise,.bs-fall{display:none}
 }
+
+/* =============================== HALLOWEEN =============================== */
+:root[data-season="halloween"]{
+  --bs-bar:#2a1740; --bs-dot:rgba(255,200,120,.35);
+  --bs-stripe:repeating-linear-gradient(90deg,#ff7a18 0 16px,#ffc233 16px 32px,#f5e6c8 32px 48px);
+  --bs-stripe2:repeating-linear-gradient(90deg,#ff7a18 0 16px,#7b3fe4 16px 32px,#1b1030 32px 48px);
+  --orb-bg:radial-gradient(circle at 35% 35%,#fff7d6,#ffd98a 60%,#f5b94a);
+  --orb-shadow:0 0 60px 20px rgba(255,200,90,.5);
+}
+:root[data-season="halloween"]:not([data-theme="dark"]){
+  --s-brand:#b8420b; --s-brand-dark:#8a2f06; --s-accent:#e8590c;
+  --s-header:#1b1030; --s-quote:#2a1740;
+  --s-sand:#f0b27a; --s-line:#f3dfc8; --s-card-hover:#fde8d2;
+  --glow1:rgba(255,122,24,.42); --glow2:rgba(123,63,228,.32); --glow3:rgba(255,200,90,.24); --ground-op:.16;
+}
+:root[data-season="halloween"][data-theme="dark"]{
+  --s-brand:#ff9f43; --s-brand-dark:#ffb86b; --s-accent:#b36bff;
+  --s-header:#0e0716; --s-quote:#1f1233;
+  --s-page:#0c0713; --s-card:#190f26; --s-card-hover:#2d1c45;
+  --s-sand:#3b2455; --s-line:#35204d; --s-text:#efe6f7; --s-muted:#b7a6cc;
+  --glow1:rgba(255,122,24,.58); --glow2:rgba(123,63,228,.48); --glow3:rgba(255,200,90,.30); --ground-op:.55;
+}
+html[data-season="halloween"] .bs-ground{background-image:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%20480%2096%27%3E%3Cg%20fill=%27%23241038%27%3E%3Cpath%20d=%27M0%2096V72c60-18%20120-18%20180%200s120%2018%20180-4%2090-14%20120%200v28z%27/%3E%3Cpath%20d=%27M60%2072V50a10%2010%200%200%201%2020%200v22z%27/%3E%3Cpath%20d=%27M96%2076V60a8%208%200%200%201%2016%200v16z%27/%3E%3Cpath%20d=%27M300%2070V44a11%2011%200%200%201%2022%200v26z%27/%3E%3C/g%3E%3Cg%20stroke=%27%23241038%27%20stroke-width=%273%27%20fill=%27none%27%20stroke-linecap=%27round%27%3E%3Cpath%20d=%27M400%2070c-2-14-4-26-10-38M392%2044l-14-10M394%2054l14-12M396%2034l-2-14%27/%3E%3C/g%3E%3C/svg%3E")}
+
+/* =============================== DIWALI =============================== */
+:root[data-season="diwali"]{
+  --bs-bar:#5a1020; --bs-dot:rgba(255,215,120,.45);
+  --bs-stripe:repeating-linear-gradient(90deg,#ffb300 0 16px,#ff6a00 16px 32px,#d4145a 32px 48px);
+  --bs-stripe2:repeating-linear-gradient(90deg,#ffb300 0 16px,#8b1a1a 16px 32px,#ff6a00 32px 48px);
+  --orb-bg:radial-gradient(circle at 50% 50%,#fffbe6 0,#ffd966 45%,#ff9d1c 100%);
+  --orb-shadow:0 0 70px 26px rgba(255,170,30,.55);
+}
+:root[data-season="diwali"]:not([data-theme="dark"]){
+  --s-brand:#b3260e; --s-brand-dark:#7f1a08; --s-accent:#e8590c;
+  --s-header:#4a0d12; --s-quote:#5a1020;
+  --s-sand:#f2c36b; --s-line:#f5e3b9; --s-card-hover:#fdebc8;
+  --glow1:rgba(255,170,30,.46); --glow2:rgba(255,90,40,.34); --glow3:rgba(255,215,90,.28); --ground-op:.18;
+}
+:root[data-season="diwali"][data-theme="dark"]{
+  --s-brand:#ffc247; --s-brand-dark:#ffd27a; --s-accent:#ff7a45;
+  --s-header:#1d0608; --s-quote:#3a0f16;
+  --s-page:#130608; --s-card:#231013; --s-card-hover:#3a1a1e;
+  --s-sand:#5a3a1a; --s-line:#4a2a1c; --s-text:#fbeee0; --s-muted:#d1b79e;
+  --glow1:rgba(255,170,30,.62); --glow2:rgba(255,90,40,.50); --glow3:rgba(255,215,90,.34); --ground-op:.6;
+}
+html[data-season="diwali"] .bs-ground{background-image:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%20480%2096%27%3E%3Cg%20fill=%27%234a0d12%27%3E%3Cpath%20d=%27M0%2096V82h50V72a16%2016%200%200%201%2032%200v10h46V68a24%2024%200%200%201%2048%200v14h44V76h34V62a14%2014%200%200%201%2028%200v14h56V80h62V70a16%2016%200%200%201%2032%200v10h48v16z%27/%3E%3C/g%3E%3Cg%20stroke=%27%234a0d12%27%20stroke-width=%273%27%20fill=%27none%27%20stroke-linecap=%27round%27%3E%3Cpath%20d=%27M66%2056v-12M152%2044v-14M268%2048v-10M416%2054v-12%27/%3E%3C/g%3E%3C/svg%3E")}
+html[data-season="diwali"] .bs-bob{filter:drop-shadow(0 0 8px rgba(255,170,30,.9))}
+
+/* =============================== CHRISTMAS =============================== */
+:root[data-season="christmas"]{
+  --bs-bar:#14502f; --bs-dot:rgba(255,255,255,.5);
+  --bs-stripe:repeating-linear-gradient(135deg,#c8102e 0 10px,#ffffff 10px 20px);
+  --bs-stripe2:repeating-linear-gradient(135deg,#c8102e 0 10px,#ffffff 10px 20px);
+  --orb-bg:radial-gradient(circle at 35% 35%,#ffffff,#dfeeff 60%,#b9d6f2);
+  --orb-shadow:0 0 56px 18px rgba(190,220,255,.6);
+}
+:root[data-season="christmas"]:not([data-theme="dark"]){
+  --s-brand:#b3171b; --s-brand-dark:#7d0f12; --s-accent:#1e7a3c;
+  --s-header:#0f3d24; --s-quote:#14502f;
+  --s-sand:#d9b46a; --s-line:#f1e4d0; --s-card-hover:#fde7e4;
+  --glow1:rgba(30,160,90,.36); --glow2:rgba(220,40,50,.32); --glow3:rgba(190,220,255,.36); --ground-op:.55;
+}
+:root[data-season="christmas"][data-theme="dark"]{
+  --s-brand:#ff6b6b; --s-brand-dark:#ff9a9a; --s-accent:#4ade80;
+  --s-header:#07140d; --s-quote:#0e2e1d;
+  --s-page:#08100c; --s-card:#101c16; --s-card-hover:#1d3226;
+  --s-sand:#2f5a40; --s-line:#264535; --s-text:#ecf5ee; --s-muted:#a9c4b2;
+  --glow1:rgba(30,160,90,.48); --glow2:rgba(220,40,50,.44); --glow3:rgba(190,220,255,.34); --ground-op:.3;
+}
+html[data-season="christmas"] .bs-ground{background-image:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%20480%2096%27%3E%3Cpath%20fill=%27%23cfe0f0%27%20d=%27M0%2096V74c50-14%20100-14%20150%200s110%2014%20170-4%20100-10%20160%202v24z%27/%3E%3Cg%20fill=%27%231f5a3a%27%3E%3Cpath%20d=%27M60%2078l-16%2020h32zM60%2062l-13%2018h26zM60%2046l-10%2018h20z%27/%3E%3Cpath%20d=%27M330%2080l-12%2016h24zM330%2067l-10%2015h20zM330%2054l-8%2014h16z%27/%3E%3Cpath%20d=%27M420%2078l-14%2018h28zM420%2064l-11%2016h22zM420%2050l-9%2016h18z%27/%3E%3C/g%3E%3C/svg%3E")}

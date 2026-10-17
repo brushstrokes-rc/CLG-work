@@ -79,7 +79,7 @@
             s.style.setProperty("--sway", rnd(-60, 60).toFixed(0) + "px");
           } else if (spec.kind === "bob") {
             s.style.left = rnd(2, 94).toFixed(1) + "%";
-            s.style.bottom = rnd(2, 14).toFixed(0) + "px";
+            s.style.setProperty("--b", rnd(2, 14).toFixed(0) + "px");   // footer ke upar se itna oopar
           } else if (spec.kind === "twinkle") {
             s.style.left = rnd(2, 96).toFixed(1) + "%";
             s.style.top = rnd(14, 92).toFixed(1) + "%";
@@ -89,6 +89,30 @@
       });
 
       document.body.appendChild(layer);
+
+      // Footer ke upar rakhna: footer scroll karke aata hai to neeche ki decoration (zameen, kaddu, diye, glow)
+      // uske saath upar uthti rehti hai, footer ke peeche chhupti nahi.
+      var footer = null, queued = false;
+      function updateFooter() {
+        queued = false;
+        if (!footer || !document.body.contains(footer)) footer = document.querySelector(".app-footer");
+        var h = 0;
+        if (footer && footer.offsetParent !== null) {
+          var r = footer.getBoundingClientRect();
+          h = Math.max(0, Math.min(r.height, window.innerHeight - r.top));
+        }
+        layer.style.setProperty("--bs-footer-h", Math.round(h) + "px");
+      }
+      function queue() {
+        if (queued) return;
+        queued = true;
+        if (window.requestAnimationFrame) window.requestAnimationFrame(updateFooter); else setTimeout(updateFooter, 16);
+      }
+      window.addEventListener("scroll", queue, { passive: true });
+      window.addEventListener("resize", queue);
+      window.addEventListener("bs:enter", queue);
+      if (window.ResizeObserver) new ResizeObserver(queue).observe(document.body);
+      queue();
 
       // tab chhupa ho to animation ruk jaye (battery / CPU bachane ke liye)
       document.addEventListener("visibilitychange", function () {

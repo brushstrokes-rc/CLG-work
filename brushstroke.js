@@ -109,6 +109,10 @@ const students = [
   "Ayushman Singh"
 ];
 
+// Profile page ke liye (sirf padhne wali copy): course list aur Main attendance ke naam
+window.bsCourses = courses.slice();
+window.bsStudentNames = students.slice();
+
 // ---------- Attendance data ----------
 // Firestore ki wahi "attendance" collection (isliye rules me kuch badalna nahi padega):
 //   "2026-09-29_offline" / "2026-09-29_online"  -> table me abhi jo attendance mark ho rahi hai (draft, autosave)

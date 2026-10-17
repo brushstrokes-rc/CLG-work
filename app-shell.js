@@ -16,6 +16,7 @@ const navLinks = document.querySelectorAll("#appNav a");
 
 // ---------- Pages ----------
 function showApp(view, clicked) {
+  if (view !== "profile") window.bsLastView = view;   // Profile ka Back button yahin wapas jata hai
   const pages = {
     home: "viewHome",
     attendance: "viewAttendance",
@@ -23,7 +24,8 @@ function showApp(view, clicked) {
     events: "viewEvents",
     coremembers: "core-members-view",
     announcements: "viewAnnouncements",
-    info: "viewInfo"
+    info: "viewInfo",
+    profile: "viewProfile"
   };
 
   Object.entries(pages).forEach(function ([key, id]) {
@@ -46,6 +48,8 @@ function showApp(view, clicked) {
 
   const active = clicked || document.querySelector('#appNav a[data-view="' + view + '"]');
   navLinks.forEach(function (a) { a.classList.toggle("active", a === active); });
+  const profileBtn = document.getElementById("profileBtn");
+  if (profileBtn) profileBtn.classList.toggle("active", view === "profile");
   window.scrollTo(0, 0);
 }
 window.bsShowApp = function (view) { showApp(view); };
@@ -68,15 +72,22 @@ function renderProfileCard(u) {
     : (parts[0] || "?").slice(0, 2).toUpperCase();
   document.getElementById("dashHi").textContent = "Welcome, " + (parts[0] || "");
 }
-async function loadProfile() {
+// Live listener: Home card aur Profile page dono isi users/{uid} doc se chalte hain,
+// isliye Profile me Save karte hi card badal jata hai (aur doosre devices par bhi).
+let profileUnsub = null;
+function loadProfile() {
   const user = auth.currentUser;
   if (!user) return;
-  let p = { name: (user.email || "").split("@")[0], roll: "", course: "" };
-  try {
-    const snap = await getDoc(doc(db, "users", user.uid));
-    if (snap.exists()) p = snap.data();
-  } catch (e) { console.error("Profile load failed:", e); }
-  renderProfileCard(p);
+  if (profileUnsub) { profileUnsub(); profileUnsub = null; }
+  const fallback = { name: (user.email || "").split("@")[0], roll: "", course: "" };
+  window.bsProfile = Object.assign({ uid: user.uid, exists: false }, fallback);
+  renderProfileCard(fallback);
+  profileUnsub = onSnapshot(doc(db, "users", user.uid), function (snap) {
+    const p = snap.exists() ? snap.data() : fallback;
+    window.bsProfile = Object.assign({ uid: user.uid, exists: snap.exists() }, p);
+    renderProfileCard(p);
+    window.dispatchEvent(new Event("bs:profile"));
+  }, function (e) { console.error("Profile load failed:", e); });
 }
 
 // ---------- bs:enter ----------

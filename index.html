@@ -26,6 +26,7 @@ document.documentElement.dataset.theme=__t;
 <link rel="stylesheet" href="brushstroke.css">
 <link rel="stylesheet" href="app-shell.css"><!-- NAYA: brushstroke.css ke baad -->
 <link rel="stylesheet" href="student-profile.css"><!-- NAYA: student profile pages -->
+<link rel="stylesheet" href="profile.css"><!-- NAYA: profile page -->
 <link rel="stylesheet" href="announcements.css">
 <link rel="stylesheet" href="Core-members-view.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -111,6 +112,7 @@ document.documentElement.dataset.theme=__t;
       <a href="#core-members" data-view="coremembers">Core Members</a>
       <a href="#info" data-view="info">Info</a>
       <a href="#announcements" data-view="announcements">Announcements</a>
+      <button type="button" id="profileBtn" class="nav-profile-btn" aria-label="Open profile" title="Profile"></button>
     </nav>
 
     <button id="themeBtn" type="button" aria-label="Switch light or dark canvas mode">🌙</button>
@@ -337,6 +339,7 @@ document.documentElement.dataset.theme=__t;
       <div id="core-members-view" style="display:none;"></div>
 
       <!-- INFO PAGE -->
+      <div id="viewProfile" hidden></div>
       <div id="viewInfo" hidden>
         <div class="ann-page-header">
           <h2 class="sec-title">ℹ️ Info</h2>
@@ -513,6 +516,7 @@ document.documentElement.dataset.theme=__t;
 <script type="module" src="brushstroke.js"></script>
 <script type="module" src="app-shell.js"></script>
 <script type="module" src="student-profile.js"></script><!-- NAYA: app-shell.js ke baad -->
+<script type="module" src="profile.js"></script><!-- NAYA: student-profile.js ke baad -->
 <script type="module" src="announcements.js"></script>
 <script src="attendance-view.js"></script><!-- NAYA: brushstroke.js ke baad -->
 <!-- index.html mein ye check karo — type="module" hona chahiye -->

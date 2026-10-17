@@ -61,7 +61,7 @@ function makeSession(id, date, mode, data) {
     }
   });
   return {
-    id: id, date: date, mode: mode,
+    id: id, date: date, mode: mode, origin: "main",
     title: typeof data._title === "string" ? data._title.trim() : "",
     marks: marks, markCount: n,
     createdAt: typeof data._createdAt === "number" ? data._createdAt : 0
@@ -167,7 +167,7 @@ function buildCoreSessions(docs) {
       if (st) { marks[canonName(mem.name)] = st; n++; }
       // absent is inferred — don't store, handled by statusOf()
     });
-    all.push({ id: id, date: dateKey, mode: mode,
+    all.push({ id: id, date: dateKey, mode: mode, origin: "core",
                title: d.title || "", marks: marks, markCount: n,
                createdAt: d.savedAt ? new Date(d.savedAt).getTime() : 0 });
     seenLegacyDates.add(dateKey);
@@ -186,7 +186,7 @@ function buildCoreSessions(docs) {
       if (st) { marks[canonName(mem.name)] = st; n++; }
     });
     const mode = d.mode || "offline";
-    all.push({ id: id, date: id, mode: mode,
+    all.push({ id: id, date: id, mode: mode, origin: "core",
                title: d.title || "", marks: marks, markCount: n,
                createdAt: d.savedAt ? new Date(d.savedAt).getTime() : 0 });
   });
@@ -210,7 +210,7 @@ function buildCoreSessions(docs) {
         });
         // Only count draft if at least one member was ticked
         if (n === 0 && !COUNT_EMPTY_SESSIONS) return;
-        all.push({ id: dk, date: draft.dateKey, mode: draft.mode || "offline",
+        all.push({ id: dk, date: draft.dateKey, mode: draft.mode || "offline", origin: "core",
                    title: draft.title || "", marks: marks, markCount: n,
                    createdAt: draft.t || 0 });
       });
@@ -350,7 +350,13 @@ onAuthStateChanged(auth, function (user) {
   }
 });
 
+// Profile page ko wahi sessions chahiye jo Student Profile page dikhata hai (ek hi counting)
+window.bsAttendanceData = function () {
+  return { ready: loaded || coreLoaded, error: loadError, sessions: combinedSessions, canonName: canonName };
+};
+
 function refresh() {
+  window.dispatchEvent(new Event("bs:attendance-data"));
   if (visible("viewStudentProfile")) renderProfile();
   if (visible("viewStudentRecords")) renderRecords();
 }

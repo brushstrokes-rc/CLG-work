@@ -25,6 +25,8 @@ const CM_MEMBERS = [
 ];
 
 // ── STATE ────────────────────────────────────────────────────────────────────
+window.bsCoreMemberNames = CM_MEMBERS.map(m => m.name);   // Profile page ke liye (sirf padhne wali copy)
+
 // Purani spelling ("Shaksham Katiyar") wale saved records ko naye naam se jodne ke liye; records badalte nahi.
 const CM_ALIASES = { "Shaksham Katiyar": "Saksham Katiyar" };
 function cmCanon(n) { return Object.prototype.hasOwnProperty.call(CM_ALIASES, n) ? CM_ALIASES[n] : n; }

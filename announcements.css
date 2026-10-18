@@ -32,12 +32,19 @@
 .ann-add-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
 
 /* Cards grid */
+/* Har announcement poori width me, ek ke neeche ek */
 .ann-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
   margin-bottom: 24px;
 }
+.ann-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.ann-item > .ann-card { flex: 1; min-width: 0; }
 .ann-card {
   background: var(--s-card);
   border: 1px solid var(--s-sand);
@@ -49,11 +56,10 @@
   transition: box-shadow .15s;
 }
 .ann-card:hover { box-shadow: 0 5px 18px rgba(0,0,0,.14); }
+/* poora poster dikhe (crop nahi): width 100%, height apne aap */
 .ann-card-thumb {
   width: 100%;
-  aspect-ratio: 210/297;   /* A4 portrait ratio */
-  object-fit: cover;
-  object-position: top center;
+  height: auto;
   display: block;
   background: #f5f0e8;
 }
@@ -96,6 +102,20 @@
   transition: filter .12s;
 }
 .ann-card-actions button:hover { filter: brightness(1.1); }
+/* Edit / Delete card ke BAHAR, side me (phone par card ke neeche) */
+.ann-side {
+  flex: 0 0 auto;
+  flex-direction: column;
+  width: 108px;
+  padding: 0;
+  position: sticky;
+  top: 70px;
+}
+.ann-side button { padding: 10px 0; white-space: nowrap; }
+@media (max-width: 620px) {
+  .ann-item { flex-direction: column; align-items: stretch; gap: 10px; }
+  .ann-side { flex-direction: row; width: auto; position: static; }
+}
 .ann-btn-edit { background: #2b78b8; color: #fff; }
 .ann-btn-del  { background: #c0392b; color: #fff; }
 .ann-empty {

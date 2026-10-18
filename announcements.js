@@ -462,6 +462,8 @@ function renderAnnGrid(list) {
   empty.hidden = true;
 
   pub.forEach(ann => {
+    const item = document.createElement("div");      // card + uske bahar ke buttons
+    item.className = "ann-item";
     const card = document.createElement("div");
     card.className = "ann-card";
 
@@ -484,13 +486,14 @@ function renderAnnGrid(list) {
       : "";
     body.append(ttl,dt); card.appendChild(body);
 
-    const actions = document.createElement("div"); actions.className="ann-card-actions";
+    const actions = document.createElement("div"); actions.className="ann-card-actions ann-side";
     const editBtn = document.createElement("button"); editBtn.className="ann-btn-edit"; editBtn.textContent="✏️ Edit";
     editBtn.addEventListener("click", () => openEditor(ann.id, ann));
     const delBtn  = document.createElement("button"); delBtn.className="ann-btn-del";  delBtn.textContent="🗑️ Delete";
     delBtn.addEventListener("click", () => confirmDeleteAnn(ann));
-    actions.append(editBtn,delBtn); card.appendChild(actions);
-    grid.appendChild(card);
+    actions.append(editBtn,delBtn);
+    item.append(card, actions);                      // buttons card ke andar nahi, bagal me
+    grid.appendChild(item);
   });
 }
 

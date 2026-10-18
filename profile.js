@@ -33,6 +33,36 @@ function findName(list, username, canon) {
   return null;
 }
 
+function firstToken(s) { return String(s || "").trim().split(/\s+/)[0] || ""; }
+function tokenCount(s) { return String(s || "").trim().split(/\s+/).filter(Boolean).length; }
+
+// Pura naam na mile to sirf pehla naam: "sagar" <-> "Sagar Sharma" (dono taraf, capital/space ka farq nahi).
+// Sirf tab jab dono me se ek naam me ek hi shabd ho; do alag surname wale ("Sagar Verma" vs "Sagar Sharma") match nahi hote.
+function fuzzyCandidates(list, username, canon) {
+  const c = typeof canon === "function" ? canon : function (x) { return x; };
+  const uName = c(username), uFirst = norm(firstToken(uName)), uSingle = tokenCount(uName) <= 1;
+  const out = [];
+  (list || []).forEach(function (n) {
+    const cn = c(n);
+    if (!uFirst || norm(firstToken(cn)) !== uFirst) return;
+    if (!(uSingle || tokenCount(cn) <= 1)) return;
+    if (out.indexOf(cn) === -1) out.push(cn);
+  });
+  return out;
+}
+
+// Pehle poora naam (har list me), na mile to pehla naam. Fuzzy sirf tab jab kisi bhi list me poora naam nahi mila
+// (warna "Manya" Main ki Manya Singla (Core) ban jati). Do log same pehle naam ke ho to guess nahi karte.
+function resolveNames(mainList, coreList, username, canon) {
+  const exM = findName(mainList, username, canon), exC = findName(coreList, username, canon);
+  if (exM || exC) return { main: exM, core: exC, fuzzy: false, ambiguous: [] };
+  const fm = fuzzyCandidates(mainList, username, canon), fc = fuzzyCandidates(coreList, username, canon);
+  const amb = [];
+  if (fm.length > 1) fm.forEach(function (n) { amb.push(n); });
+  if (fc.length > 1) fc.forEach(function (n) { if (amb.indexOf(n) === -1) amb.push(n); });
+  return { main: fm.length === 1 ? fm[0] : null, core: fc.length === 1 ? fc[0] : null, fuzzy: fm.length === 1 || fc.length === 1, ambiguous: amb };
+}
+
 // Main sessions sirf Main list wale par, Core sessions sirf Core members par lagte hain.
 // Jis session me us naam ki mark nahi = Absent.
 function applicableRows(sessions, mainName, coreName) {
@@ -337,12 +367,11 @@ function init() {
     if (api.error) return { state: "error" };
     if (!api.ready) return { state: "loading" };
     const canon = api.canonName;
-    const mainName = findName(window.bsStudentNames, username(), canon);
-    const coreName = findName(window.bsCoreMemberNames, username(), canon);
-    if (!mainName && !coreName) return { state: "nolink" };
-    const rows = applicableRows(api.sessions, mainName, coreName);
+    const r = resolveNames(window.bsStudentNames, window.bsCoreMemberNames, username(), canon);
+    if (!r.main && !r.core) return { state: r.ambiguous.length ? "ambiguous" : "nolink", names: r.ambiguous };
+    const rows = applicableRows(api.sessions, r.main, r.core);
     const t = tally(rows);
-    return { state: "ok", rows: rows, counts: t.counts, total: t.total };
+    return { state: "ok", rows: rows, counts: t.counts, total: t.total, matchedAs: r.fuzzy ? (r.main || r.core) : "" };
   }
 
   function renderStats() {
@@ -371,9 +400,10 @@ function init() {
     $("pfStatNote").textContent =
       m.state === "loading" ? "Loading attendance…" :
       m.state === "error" ? "Couldn't load attendance. Check your internet connection and try again." :
+      m.state === "ambiguous" ? "Your username matches more than one name on the attendance lists (" + m.names.join(", ") + "), so your attendance can't be linked automatically." :
       m.state === "nolink" ? "No attendance records are linked to this username, because it doesn't match a name on the attendance lists." :
       total === 0 ? "No attendance sessions have been recorded for you yet." :
-      "Based on " + total + (total === 1 ? " session." : " sessions.");
+      "Based on " + total + (total === 1 ? " session" : " sessions") + (m.matchedAs ? ", matched to “" + m.matchedAs + "” from your username." : ".");
     if (chartMode) renderChart();
   }
 

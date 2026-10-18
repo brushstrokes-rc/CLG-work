@@ -94,13 +94,11 @@ function buildSessions(docs) {
     return a.id < b.id ? 1 : -1;
   });
 
-  const seen = {}, out = [];
+  const seenId = new Set(), out = [];
   all.forEach(function (s) {
-    if (!COUNT_EMPTY_SESSIONS && s.markCount === 0) return;       // attendance not actually taken
-    const sig = [s.date, s.mode, s.title.toLowerCase(),
-      Object.keys(s.marks).sort().map(function (k) { return k + "=" + s.marks[k]; }).join(",")].join("|");
-    if (seen[sig]) return;                                        // exact duplicate record
-    seen[sig] = true;
+    if (!COUNT_EMPTY_SESSIONS && s.markCount === 0) return;  // attendance not actually taken
+    if (seenId.has(s.id)) return;                            // same Firestore doc read twice
+    seenId.add(s.id);
     out.push(s);
   });
   return out;
@@ -154,7 +152,7 @@ function matchesQuery(s, q) {
 // Each member's status is inside doc.members: [{name, status}].
 // New doc ids:    "yyyy-mm-dd_online_cm_<stamp>"   (saved sessions)
 // Legacy doc ids: "yyyy-mm-dd"                     (old single-per-date docs)
-// Draft sessions from localStorage (key "bs-core-drafts-v2") are also included.
+// Draft sessions from localStorage (key "bs-core-ticks-v1") are also included.
 function buildCoreSessions(docs) {
   const all = [];
   const seenLegacyDates = new Set();
@@ -197,17 +195,20 @@ function buildCoreSessions(docs) {
                createdAt: d.savedAt ? new Date(d.savedAt).getTime() : 0 });
   });
 
-  // 3. Draft sessions from localStorage (bs-core-drafts-v2)
+  // 3. Draft sessions from localStorage
+  // Key: "bs-core-ticks-v1"
+  // Structure: { "yyyy-mm-dd": { state: { memberName: "present"|"half"|null }, t: ms } }
+  // The object key IS the dateKey. Each draft is a separate session even if a saved
+  // session exists on the same date — they are independent attendance records.
+  // Only skip if marks are exactly identical to an already-added session (signature dedup below).
   try {
-    const raw = localStorage.getItem("bs-core-drafts-v2");
+    const raw = localStorage.getItem("bs-core-ticks-v1");
     const drafts = raw ? JSON.parse(raw) : {};
     if (drafts && typeof drafts === "object") {
-      Object.keys(drafts).forEach(function (dk) {
-        const draft = drafts[dk];
-        if (!draft || !draft.dateKey) return;
-        // Skip if this draft key matches a saved Firestore session id (it's an unsaved edit)
-        if (docs[dk]) return;
-        const state = draft.state || {};
+      Object.keys(drafts).forEach(function (dateKey) {
+        const draft = drafts[dateKey];
+        if (!draft || !draft.state) return;
+        const state = draft.state;
         const marks = Object.create(null);
         let n = 0;
         Object.keys(state).forEach(function (name) {
@@ -216,25 +217,23 @@ function buildCoreSessions(docs) {
         });
         // Only count draft if at least one member was ticked
         if (n === 0 && !COUNT_EMPTY_SESSIONS) return;
-        all.push({ id: dk, date: draft.dateKey, mode: draft.mode || "offline", origin: "core",
-                   title: draft.title || "", marks: marks, markCount: n,
+        all.push({ id: "draft-" + dateKey, date: dateKey, mode: "offline", origin: "core",
+                   title: "", marks: marks, markCount: n,
                    createdAt: draft.t || 0 });
       });
     }
   } catch (e) { /* localStorage unavailable */ }
 
-  // Sort newest first, deduplicate by exact signature
+  // Sort newest first, deduplicate only by id (same Firestore doc read twice)
   all.sort(function (a, b) {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     return b.createdAt - a.createdAt;
   });
-  const seen = {}, out = [];
+  const seenId = new Set(), out = [];
   all.forEach(function (s) {
     if (!COUNT_EMPTY_SESSIONS && s.markCount === 0) return;
-    const sig = [s.date, s.mode, s.title.toLowerCase(),
-      Object.keys(s.marks).sort().map(function (k) { return k + "=" + s.marks[k]; }).join(",")].join("|");
-    if (seen[sig]) return;
-    seen[sig] = true;
+    if (seenId.has(s.id)) return;
+    seenId.add(s.id);
     out.push(s);
   });
   return out;
@@ -267,9 +266,14 @@ function hideMine() { MY_VIEWS.forEach(function (id) { const el = $(id); if (el)
 
 function showMine(id) {
   APP_VIEWS.forEach(function (v) { const el = $(v); if (el) el.hidden = true; });
+  // core-members-view is controlled via display (not hidden), so hide it explicitly
+  var cmEl = document.getElementById("core-members-view");
+  if (cmEl) cmEl.style.display = "none";
   MY_VIEWS.forEach(function (v) { $(v).hidden = v !== id; });
+  // Highlight the navbar tab matching where the user came from
+  var activeView = cur.origin === "coremembers" ? "coremembers" : "attendance";
   document.querySelectorAll("#appNav a").forEach(function (a) {
-    a.classList.toggle("active", a.dataset.view === "attendance");
+    a.classList.toggle("active", a.dataset.view === activeView);
   });
   window.scrollTo(0, 0);
 }
@@ -327,15 +331,14 @@ function rebuildCombined() {
   // Merge: a core-members session has a unique id starting with a date and containing "_cm_"
   // or a legacy "yyyy-mm-dd" from core-attendance. Main attendance ids never contain "_cm_".
   // So there is no overlap between the two id spaces — just concat.
-  // Then deduplicate by exact signature (same date + mode + title + marks).
+  // Deduplicate only by id — same Firestore doc should never appear twice.
+  // Two sessions with identical marks are still two separate sessions.
   const all = sessions.concat(coreSessions);
-  const seen = {}, out = [];
+  const seenId = new Set(), out = [];
   all.forEach(function (s) {
     if (!COUNT_EMPTY_SESSIONS && s.markCount === 0) return;
-    const sig = [s.date, s.mode, (s.title || "").toLowerCase(),
-      Object.keys(s.marks).sort().map(function (k) { return k + "=" + s.marks[k]; }).join(",")].join("|");
-    if (seen[sig]) return;
-    seen[sig] = true;
+    if (seenId.has(s.id)) return;
+    seenId.add(s.id);
     out.push(s);
   });
   out.sort(function (a, b) {
@@ -620,6 +623,8 @@ document.addEventListener("click", function (e) {
 });
 
 // Expose so Core-members-view.js name clicks open the same stats page
-window.bsOpenStudentProfile = function (name) {
-  openProfile(name, "attendance");
+// origin: "coremembers" → Back goes to Core Members
+//         "attendance"  → Back goes to Attendance (default)
+window.bsOpenStudentProfile = function (name, origin) {
+  openProfile(name, origin || "attendance");
 };

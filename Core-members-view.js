@@ -360,7 +360,7 @@ function cmRenderMembers(filter) {
     // Name click → same stats page as main Attendance navbar
     div.querySelector(".cm-member-name").addEventListener("click", function (e) {
       e.stopPropagation();
-      if (typeof window.bsOpenStudentProfile === "function") window.bsOpenStudentProfile(m.name);
+      if (typeof window.bsOpenStudentProfile === "function") window.bsOpenStudentProfile(m.name, "coremembers");
     });
     list.appendChild(div);
   });

@@ -17,8 +17,14 @@ const RE_CM_EVENT  = /^(\d{4}-\d{2}-\d{2})_(offline|online)_cm_[a-z0-9]+$/;
 const RE_CM_LEGACY = /^(\d{4}-\d{2}-\d{2})$/;
 
 // Same name everywhere: old spellings stored in earlier records count as the correct name (records are not changed).
-const NAME_ALIASES = { "Shahnaz": "Shahnaz Ahmad", "Shaksham Katiyar": "Saksham Katiyar" };
-function canonName(n) { return Object.prototype.hasOwnProperty.call(NAME_ALIASES, n) ? NAME_ALIASES[n] : n; }
+const NAME_ALIASES = { "Shahnaz": "Shahnaz Ahmad", "Shaksham Katiyar": "Saksham Katiyar", "Manya": "Manya Singla", "Manya singla": "Manya Singla" };
+const NAME_ALIASES_NORM = {};   // capital / space ka farq nahi: "manya", "Manya  Singla" bhi pehchane jaate hain
+Object.keys(NAME_ALIASES).forEach(function (k) { NAME_ALIASES_NORM[k.toLowerCase().replace(/\s+/g, "")] = NAME_ALIASES[k]; });
+function canonName(n) {
+  if (Object.prototype.hasOwnProperty.call(NAME_ALIASES, n)) return NAME_ALIASES[n];
+  const k = String(n == null ? "" : n).toLowerCase().replace(/\s+/g, "");
+  return Object.prototype.hasOwnProperty.call(NAME_ALIASES_NORM, k) ? NAME_ALIASES_NORM[k] : n;
+}
 
 const auth = getAuth(getApp());
 const db   = getFirestore(getApp());

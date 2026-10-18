@@ -97,7 +97,7 @@ const students = [
   "Shivani",
   "Saurabh Bhandari",
   "Deepak Sharma",
-  "Manya singla",
+  "Manya Singla",
   "Vandana",
   "Hiten Singh",
   "Manvi Singh",
@@ -122,8 +122,14 @@ window.bsStudentNames = students.slice();
 //   "2026-09-24" (purana format, bina mode ke)  -> Offline draft maana jata hai
 // Naam ek jaisa rakhne ke liye: purani spelling jo Firestore ke purane records me hai -> sahi naam.
 // Purane records delete/badle nahi jaate; padhte waqt naya naam maana jata hai.
-const NAME_ALIASES = { "Shahnaz": "Shahnaz Ahmad", "Shaksham Katiyar": "Saksham Katiyar" };
-function canonName(n) { return Object.prototype.hasOwnProperty.call(NAME_ALIASES, n) ? NAME_ALIASES[n] : n; }
+const NAME_ALIASES = { "Shahnaz": "Shahnaz Ahmad", "Shaksham Katiyar": "Saksham Katiyar", "Manya": "Manya Singla", "Manya singla": "Manya Singla" };
+const NAME_ALIASES_NORM = {};   // capital / space ka farq nahi: "manya", "Manya  Singla" bhi pehchane jaate hain
+Object.keys(NAME_ALIASES).forEach(function (k) { NAME_ALIASES_NORM[k.toLowerCase().replace(/\s+/g, "")] = NAME_ALIASES[k]; });
+function canonName(n) {
+  if (Object.prototype.hasOwnProperty.call(NAME_ALIASES, n)) return NAME_ALIASES[n];
+  const k = String(n == null ? "" : n).toLowerCase().replace(/\s+/g, "");
+  return Object.prototype.hasOwnProperty.call(NAME_ALIASES_NORM, k) ? NAME_ALIASES_NORM[k] : n;
+}
 function legacyKeysFor(n) { return Object.keys(NAME_ALIASES).filter(function (k) { return NAME_ALIASES[k] === n; }); }
 let rawDocs = {};            // docId -> Firestore data
 let sessions = {};           // drafts: "yyyy-mm-dd|offline" -> { id, date, mode, title, marks, createdAt }

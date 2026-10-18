@@ -500,7 +500,7 @@ function startAnnListener() {
   annUnsub = onSnapshot(q, snap => {
     const list = []; snap.forEach(d => list.push({id:d.id,...d.data()}));
     renderAnnGrid(list);
-  }, err => console.error("Ann listener:", err));
+  }, err => { console.error("Ann listener:", err); annUnsub = null; });   // error ke baad dobara start ho sake
 }
 
 // ================================================================
@@ -515,7 +515,7 @@ function startInfoListener() {
   infoUnsub = onSnapshot(q, snap => {
     const list = []; snap.forEach(d => list.push({id:d.id,...d.data()}));
     renderInfoPosts(list);
-  }, err => console.error("Info listener:", err));
+  }, err => { console.error("Info listener:", err); infoUnsub = null; });
 }
 
 function renderInfoPosts(list) {
@@ -654,11 +654,18 @@ function compressInfoImage(file) {
 // ================================================================
 //  INIT
 // ================================================================
+function startLive() {
+  startAnnListener();
+  startInfoListener();
+}
+
 function init() {
   bindToolbar();
-  startAnnListener();
   bindInfoForm();
-  startInfoListener();
+  // Firestore listeners sirf LOGIN ke baad. Login se pehle rules (request.auth != null) permission-denied dete hain
+  // aur listener hamesha ke liye band ho jata tha, isliye posts upload hone par bhi list me nahi dikhte the.
+  window.addEventListener("bs:enter", startLive);
+  if (auth.currentUser) startLive();
 }
 
 if (document.readyState==="loading") {

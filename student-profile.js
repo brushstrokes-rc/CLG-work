@@ -197,17 +197,33 @@ function buildCoreSessions(docs) {
 
   // 3. Draft sessions from localStorage
   // Key: "bs-core-ticks-v1"
-  // Structure: { "yyyy-mm-dd": { state: { memberName: "present"|"half"|null }, t: ms } }
-  // The object key IS the dateKey. Each draft is a separate session even if a saved
-  // session exists on the same date — they are independent attendance records.
-  // Only skip if marks are exactly identical to an already-added session (signature dedup below).
+  // New structure (after mode-split fix):
+  //   { "yyyy-mm-dd|online":  { state: {name: status|null}, dateKey, mode, t } }
+  //   { "yyyy-mm-dd|offline": { state: {name: status|null}, dateKey, mode, t } }
+  // Each draft key is a separate session (one per date+mode).
+  // Old structure (pre-fix): { "yyyy-mm-dd": { state, t } } — still handled below.
   try {
     const raw = localStorage.getItem("bs-core-ticks-v1");
     const drafts = raw ? JSON.parse(raw) : {};
     if (drafts && typeof drafts === "object") {
-      Object.keys(drafts).forEach(function (dateKey) {
-        const draft = drafts[dateKey];
+      Object.keys(drafts).forEach(function (draftKey) {
+        const draft = drafts[draftKey];
         if (!draft || !draft.state) return;
+
+        // Determine dateKey and mode from the key or stored fields
+        let dateKey, mode;
+        const modeMatch = draftKey.match(/^(\d{4}-\d{2}-\d{2})\|(online|offline)$/);
+        if (modeMatch) {
+          dateKey = modeMatch[1];
+          mode    = modeMatch[2];
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(draftKey)) {
+          // Old format — date only, no mode stored
+          dateKey = draftKey;
+          mode    = draft.mode || "offline";
+        } else {
+          return; // unknown key format
+        }
+
         const state = draft.state;
         const marks = Object.create(null);
         let n = 0;
@@ -215,9 +231,8 @@ function buildCoreSessions(docs) {
           const st = normStatus(state[name]);
           if (st) { marks[canonName(name)] = st; n++; }
         });
-        // Only count draft if at least one member was ticked
         if (n === 0 && !COUNT_EMPTY_SESSIONS) return;
-        all.push({ id: "draft-" + dateKey, date: dateKey, mode: "offline", origin: "core",
+        all.push({ id: "draft-" + draftKey, date: dateKey, mode: mode, origin: "core",
                    title: "", marks: marks, markCount: n,
                    createdAt: draft.t || 0 });
       });

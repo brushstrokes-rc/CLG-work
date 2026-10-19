@@ -360,7 +360,7 @@ function cmRenderMembers(filter) {
     // Name click → same stats page as main Attendance navbar
     div.querySelector(".cm-member-name").addEventListener("click", function (e) {
       e.stopPropagation();
-      if (typeof window.bsOpenStudentProfile === "function") window.bsOpenStudentProfile(m.name, "coremembers");
+      if (typeof window.bsOpenStudentProfile === "function") window.bsOpenStudentProfile(m.name);
     });
     list.appendChild(div);
   });
@@ -545,23 +545,34 @@ function cmWriteDrafts() {
   catch (e) { console.warn("CM drafts save failed:", e); }
 }
 function cmDraftDate() { return cmSelectedDate || cmTodayKey(); }
+// Draft key includes mode so Online and Offline have separate slots
+function cmDraftKey(dk, mode) { return dk + "|" + (mode || cmMode); }
 
-// Abhi ki ticks is date ke naam se yaad rakho (poora snapshot: tick hata diya = null bhi yaad rehta hai)
+// Abhi ki ticks is date+mode ke naam se yaad rakho
 function cmDraftSave(dk) {
+  const key = cmDraftKey(dk, cmMode);
   const state = {};
   CM_MEMBERS.forEach(m => { state[m.name] = cmState[m.name] || null; });
   const empty = CM_MEMBERS.every(m => !state[m.name]);
-  if (empty && !cmGreenDates.has(dk)) delete cmDrafts[dk];   // koi tick nahi + saved session bhi nahi: yaad rakhne ko kuch nahi
-  else cmDrafts[dk] = { state, t: Date.now() };
+  if (empty && !cmGreenDates.has(dk)) delete cmDrafts[key];
+  else cmDrafts[key] = { state, dateKey: dk, mode: cmMode, t: Date.now() };
   cmWriteDrafts();
 }
 function cmDraftDelete(dk) {
-  if (cmDrafts[dk]) { delete cmDrafts[dk]; cmWriteDrafts(); }
+  // Delete both mode slots for this date
+  const keyOn  = cmDraftKey(dk, "online");
+  const keyOff = cmDraftKey(dk, "offline");
+  if (cmDrafts[keyOn])  { delete cmDrafts[keyOn];  cmWriteDrafts(); }
+  if (cmDrafts[keyOff]) { delete cmDrafts[keyOff]; cmWriteDrafts(); }
 }
-// Is date ke yaad rakhe ticks main screen ke state me daalo. true = draft mila
+// Is date+mode ke yaad rakhe ticks main screen ke state me daalo. true = draft mila
 function cmApplyDraft(dk) {
-  const d = cmDrafts[dk];
-  if (!d || !d.state) return false;
+  const d = cmDrafts[cmDraftKey(dk, cmMode)];
+  if (!d || !d.state) {
+    // No draft for this mode — clear state so other mode's ticks don't show
+    CM_MEMBERS.forEach(m => { cmState[m.name] = null; });
+    return false;
+  }
   CM_MEMBERS.forEach(m => {
     cmState[m.name] = d.state[m.name] || cmLegacyNames(m.name).map(k => d.state[k]).find(Boolean) || null;
   });
@@ -579,9 +590,15 @@ function cmLeaveEditIfOtherDate(dk) {
 
 // ── CONTROLS ──────────────────────────────────────────────────────────────────
 function cmSetMode(mode) {
+  if (cmMode === mode) return;
+  // Save current mode's draft before switching
+  cmDraftSave(cmDraftDate());
   cmMode = mode;
   document.getElementById("cmOnlineBtn").classList.toggle("active", mode === "online");
   document.getElementById("cmOfflineBtn").classList.toggle("active", mode === "offline");
+  // Restore new mode's draft (or clear if none)
+  cmApplyDraft(cmDraftDate());
+  cmRenderMembers(document.getElementById("cmSearchBar").value);
 }
 
 function cmToggleAttPanel() {

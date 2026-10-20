@@ -414,7 +414,9 @@ async function cmSaveData() {
       await setDoc(doc(db, "core-attendance", id), payload);
       cmDraftDeleteSlot(dk, mode);   // sirf is date + mode ka draft; doosre mode ka draft jaisa tha waisa
       cmSelectedDate = dk;
-      cmAllSessions.unshift({ id: id, dateKey: dk, title, mode, members, savedMs: Date.now() });
+      // Live listener Save ke turant (setDoc resolve hone se pehle) hi naya doc list me daal deta hai;
+      // isliye yahan sirf tab jodo jab wo pehle se list me na ho (warna ek session do baar dikhta tha).
+      if (!cmSavedById(id)) cmAllSessions.unshift({ id: id, dateKey: dk, title, mode, members, savedMs: Date.now() });
       cmSortSessions();
       cmSavedDays.add(dk);
       cmColorFor(id);

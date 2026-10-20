@@ -53,9 +53,11 @@ function showApp(view, clicked) {
   window.scrollTo(0, 0);
 }
 window.bsShowApp = function (view) { showApp(view); };
+
 navLinks.forEach(function (a) {
   a.addEventListener("click", function (e) {
     e.preventDefault();
+    window.bsCmRestore = false;   // navbar se Core Members kholne par fresh start (restore sirf stats page ke Back par)
     showApp(a.dataset.view || "home", a);
   });
 });

@@ -1,9 +1,23 @@
 // ── core-members-view.js ──
 import { getApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs }
+import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, onSnapshot }
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
 const db = getFirestore(getApp());
+
+// Shared "dates with attendance" registry (brushstroke.js bhi yahi banata hai; jo pehle load ho wahi bana deta hai)
+if (!window.bsAttDates) {
+  (function () {
+    const src = { main: new Set(), core: new Set() };
+    window.bsAttDates = {
+      set: function (source, dates) {
+        src[source] = new Set(dates);
+        window.dispatchEvent(new Event("bs:attdates"));
+      },
+      has: function (iso) { return src.main.has(iso) || src.core.has(iso); }
+    };
+  })();
+}
 
 const CM_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyISnoSu8t4ESuLdamI8HkvXw7PuoDCZipUtA96XSsNn5Bc1VadVKfgQkiLt7Q7lsa-QA/exec";
 
@@ -157,11 +171,16 @@ function initCoreMembers() {
   let container = document.getElementById("core-members-view");
   if (!container) { console.error('Core Members: id="core-members-view" index.html me nahi mila'); return; }
 
+  // Member stats page se Back: page jaisa chhoda tha waisa hi wapas (date, mode, title, search, ticks reset nahi)
+  const restoring = !!window.bsCmRestore && container.dataset.cmReady === "1";
+  window.bsCmRestore = false;
+
   // Only inject HTML once
   if (!container.dataset.cmReady) {
     cmInjectHTML(container);
     container.dataset.cmReady = "1";
   }
+  if (restoring) { cmRestoreAfterStats(); return; }
 
   const now = new Date();
   cmCalYear = now.getFullYear();
@@ -183,9 +202,21 @@ function initCoreMembers() {
   document.getElementById("cmAttBody").style.display = "flex";
 
   cmBuildCalendar();
-  cmLoadAllSessions();
+  cmStartSessionsListener();     // ek hi live listener (dobara nahi banta)
+  cmRenderSessionList("");
   cmApplyDraft(cmDraftDate());   // refresh / page wapas aane par is date ke ticks wapas
   cmRenderMembers("");
+}
+
+function cmRestoreAfterStats() {
+  cmStartSessionsListener();
+  document.getElementById("cm-main-view").style.display = "block";
+  document.getElementById("cm-view-page").style.display = "none";
+  document.getElementById("cmAttBody").style.display = cmAttPanelVisible ? "flex" : "none";
+  cmBuildCalendar();   // cmCalYear / cmCalMonth / cmSelectedDate jaise the waise
+  cmRenderMembers(document.getElementById("cmSearchBar").value);
+  cmRenderSessionList(document.getElementById("cmSessionSearch").value);
+  window.scrollTo(0, 0);
 }
 
 // ── CALENDAR ──────────────────────────────────────────────────────────────────
@@ -217,7 +248,7 @@ function cmBuildCalendar() {
     const cls = [
       "cm-cal-cell",
       isToday        ? "today"    : "",
-      cmGreenDates.has(dk) ? "has-data" : "",
+      window.bsAttDates.has(dk) ? "has-data" : "",   // saved + draft, Attendance + Core Members dono
       dk === cmSelectedDate ? "selected" : "",
     ].filter(Boolean).join(" ");
     html += `<div class="${cls}" onclick="cmSelectDate('${dk}')">${d}</div>`;
@@ -241,24 +272,47 @@ function cmSelectDate(dk) {
 }
 
 // ── FIRESTORE ─────────────────────────────────────────────────────────────────
-async function cmLoadAllSessions() {
-  try {
-    const snap = await getDocs(collection(db, "core-attendance"));
-    cmAllSessions = [];
-    cmGreenDates = new Set();
+// Saved sessions ka EK live listener (pehle har page-open par getDocs tha, jisse naya/delete hua session
+// tabhi dikhta jab page dobara khule). Ab add / save / delete turant calendar aur session list me aate hain.
+let cmSessionsUnsub = null;
+function cmStartSessionsListener() {
+  if (cmSessionsUnsub) return;
+  cmSessionsUnsub = onSnapshot(collection(db, "core-attendance"), function (snap) {
+    const list = [];
+    const saved = new Set();
     snap.forEach(docSnap => {
       const d = docSnap.data();
-      cmGreenDates.add(docSnap.id);
-      cmAllSessions.push({ dateKey: docSnap.id, title: d.title || "", mode: d.mode || "online" });
+      saved.add(docSnap.id);
+      list.push({ dateKey: docSnap.id, title: d.title || "", mode: d.mode || "online" });
     });
-    cmAllSessions.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
-    // rang purani date se naayi date ke order me baantte hain, taaki naya session aane par purane rang na badlein
-    cmColorBook = {}; cmColorNext = 0;
+    list.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+    cmAllSessions = list;
+    cmGreenDates = saved;   // sirf SAVED dates (Edit / "update" logic isi par chalta hai)
+    // rang purani date se naayi date ke order me baantte hain; hataye gaye session ka rang free, baaki ke rang nahi badalte
+    Object.keys(cmColorBook).forEach(k => { if (!saved.has(k)) delete cmColorBook[k]; });
     cmAllSessions.slice().reverse().forEach(x => cmColorFor(x.dateKey));
-    cmBuildCalendar();
-    cmRenderSessionList("");
-  } catch (e) { console.error("CM load sessions:", e); }
+    cmSyncGreen();          // calendar (Core + Attendance) khud redraw hoga
+    const sb = document.getElementById("cmSessionSearch");
+    cmRenderSessionList(sb ? sb.value : "");
+  }, function (e) { console.error("CM sessions listener:", e); cmSessionsUnsub = null; });
 }
+
+// Green dates = saved sessions + wo dates jinke kisi bhi mode ke draft me kam se kam ek tick hai
+function cmSyncGreen() {
+  const dates = new Set(cmGreenDates);
+  Object.keys(cmDrafts).forEach(function (key) {
+    const d = cmDrafts[key];
+    if (!d || !d.state) return;
+    if (!Object.keys(d.state).some(function (n) { return d.state[n]; })) return;
+    dates.add(d.dateKey || key.split("|")[0]);
+  });
+  window.bsAttDates.set("core", dates);
+}
+
+// Login ke turant baad shuru: Core Members page kholne se pehle bhi Attendance calendar me Core dates green dikhein
+window.addEventListener("bs:enter", function () { cmSyncGreen(); cmStartSessionsListener(); });
+// Registry badalte hi (Attendance ya Core Members) is page ka calendar redraw
+window.addEventListener("bs:attdates", function () { cmBuildCalendar(); });
 
 async function cmLoadDateData(dk, ignoreDraft) {
   cmExtraMembers = [];   // pichli date ke extra members kabhi nayi date me na jayein
@@ -300,7 +354,7 @@ async function cmSaveData() {
   try {
     await setDoc(doc(db, "core-attendance", dk), payload, { merge: true });   // same date doc update, doosre fields bache rehte hain
     cmGreenDates.add(dk);
-    cmDraftDelete(dk);   // ab saved record hi latest hai
+    cmDraftDelete(dk);   // ab saved record hi latest hai (isme cmSyncGreen bhi chalta hai)
     cmSelectedDate = dk;
     cmBuildCalendar();
     const ex = cmAllSessions.find(s => s.dateKey === dk);
@@ -360,7 +414,10 @@ function cmRenderMembers(filter) {
     // Name click → same stats page as main Attendance navbar
     div.querySelector(".cm-member-name").addEventListener("click", function (e) {
       e.stopPropagation();
-      if (typeof window.bsOpenStudentProfile === "function") window.bsOpenStudentProfile(m.name);
+      if (typeof window.bsOpenStudentProfile === "function") {
+        window.bsCmRestore = true;   // Back par Core Members jaisa chhoda tha waisa hi khule (reset nahi)
+        window.bsOpenStudentProfile(m.name, "coremembers");   // 2nd argument: Back isi page par wapas aayega
+      }
     });
     list.appendChild(div);
   });
@@ -557,6 +614,7 @@ function cmDraftSave(dk) {
   if (empty && !cmGreenDates.has(dk)) delete cmDrafts[key];
   else cmDrafts[key] = { state, dateKey: dk, mode: cmMode, t: Date.now() };
   cmWriteDrafts();
+  cmSyncGreen();   // tick / clear hote hi date green ya normal
 }
 function cmDraftDelete(dk) {
   // Delete both mode slots for this date
@@ -564,6 +622,7 @@ function cmDraftDelete(dk) {
   const keyOff = cmDraftKey(dk, "offline");
   if (cmDrafts[keyOn])  { delete cmDrafts[keyOn];  cmWriteDrafts(); }
   if (cmDrafts[keyOff]) { delete cmDrafts[keyOff]; cmWriteDrafts(); }
+  cmSyncGreen();
 }
 // Is date+mode ke yaad rakhe ticks main screen ke state me daalo. true = draft mila
 function cmApplyDraft(dk) {

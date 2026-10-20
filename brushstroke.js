@@ -139,6 +139,35 @@ let unsubscribeAttendance = null;
 let titleDrafts = {};        // user ka type kiya (abhi unsaved) event naam: "yyyy-mm-dd|mode" -> text. Tap se ya snapshot se nahi hatta
 let editing = null;          // Edit mode ka working copy: { id, date, mode, title, createdAt, orig, marks } (null = normal mode)
 
+// ---------- Shared "dates with attendance" registry (green dates) ----------
+// Attendance calendar aur Core Members calendar dono isi registry se green dates padhte hain.
+// Har source (main = "attendance" collection, core = "core-attendance" + Core drafts) apni dates yahan
+// push karta hai; badalte hi "bs:attdates" event chalta hai aur dono calendar khud redraw ho jaate hain.
+if (!window.bsAttDates) {
+  (function () {
+    const src = { main: new Set(), core: new Set() };
+    window.bsAttDates = {
+      set: function (source, dates) {
+        src[source] = new Set(dates);
+        window.dispatchEvent(new Event("bs:attdates"));
+      },
+      has: function (iso) { return src.main.has(iso) || src.core.has(iso); }
+    };
+  })();
+}
+
+// Green = us date par koi saved event, ya koi draft jisme kam se kam ek mark ho.
+// (Khaali draft doc -- jaise tick undo karne ke baad bacha {} -- green nahi karta.)
+function syncMainGreenDates() {
+  const dates = new Set();
+  eventDocs.forEach(function (s) { if (s && s.date) dates.add(s.date); });
+  Object.keys(sessions).forEach(function (k) {
+    const s = sessions[k];
+    if (s && s.date && Object.keys(s.marks).length) dates.add(s.date);
+  });
+  window.bsAttDates.set("main", dates);
+}
+
 function sessionKey(dateStr, mode) { return dateStr + "|" + mode; }
 function modeLabel(mode) { return mode === "online" ? "Online" : "Offline"; }
 
@@ -176,6 +205,7 @@ function buildSessions() {
     const k = sessionKey(id, "offline");
     if (!sessions[k]) sessions[k] = makeSession(id, id, "offline");
   });
+  syncMainGreenDates();
 }
 
 // write karte waqt kaunsa draft doc use hoga (purana doc ho to wahi, warna naya "date_mode")
@@ -330,10 +360,7 @@ const dateRow = dateBtn.closest(".date-row") || dateBtn.parentElement;
 dateRow.insertAdjacentElement("afterend", calWrap);
 
 function datesWithData() {
-  const set = new Set();
-  Object.values(sessions).forEach(function (s) { if (s && s.date) set.add(s.date); });
-  eventDocs.forEach(function (s) { if (s && s.date) set.add(s.date); });
-  return set;
+  return window.bsAttDates;   // shared registry: .has("yyyy-mm-dd") -- Attendance + Core Members dono ki dates
 }
 
 function bsRenderCalendarGrid() {
@@ -425,6 +452,8 @@ document.getElementById("bsCalNext").addEventListener("click", function () {
 window.bsRenderCalendar = function () {
   if (calOpen) bsRenderCalendarGrid();
 };
+// Registry badalte hi (Attendance ya Core Members se) calendar apne aap redraw ho
+window.addEventListener("bs:attdates", function () { window.bsRenderCalendar(); });
 
 // dateInput change is now only a fallback (hidden input, not used by click)
 dateInput.addEventListener("change", function () {

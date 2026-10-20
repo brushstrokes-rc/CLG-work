@@ -374,6 +374,17 @@ onAuthStateChanged(auth, function (user) {
   }
 });
 
+// isCoreM: check if name is in Core Members list (exposed by Core-members-view.js)
+function isCoreM(name) {
+  var names = window.bsCoreMemberNames;
+  return Array.isArray(names) && names.indexOf(name) !== -1;
+}
+
+// sessionsFor: Core Members get combined (main+core), others get main only
+function sessionsFor(name) {
+  return isCoreM(name) ? combinedSessions : sessions;
+}
+
 // Profile page ko wahi sessions chahiye jo Student Profile page dikhata hai (ek hi counting)
 window.bsAttendanceData = function () {
   return { ready: loaded || coreLoaded, error: loadError, sessions: combinedSessions, canonName: canonName };
@@ -486,13 +497,14 @@ function renderProfile() {
   if (loadError) { sub.textContent = "Couldn't load attendance."; note.textContent = "Check your connection and try again."; setBoxes(null, 0); return; }
   if (!loaded && !coreLoaded) { sub.textContent = "Loading attendance…"; note.textContent = ""; setBoxes(null, 0); return; }
 
-  const rec = recordsFor(combinedSessions, name);
+  const list = sessionsFor(name);
+  const rec = recordsFor(list, name);
   const counts = { present: rec.present.length, half: rec.half.length, absent: rec.absent.length };
-  const total = combinedSessions.length;
+  const total = list.length;
 
   sub.textContent  = total ? "Based on " + total + " attendance session" + (total === 1 ? "" : "s")
                            : "No attendance has been taken yet";
-  note.textContent = total ? "Includes Main Attendance and Core Members sessions." : "";
+  note.textContent = (total && isCoreM(name)) ? "Includes Main Attendance and Core Members sessions." : "";
   chart.appendChild(pieSVG(counts, total, name));
   setBoxes(counts, total);
 }
@@ -510,7 +522,7 @@ function setBoxes(counts, total) {
 let sgItems = [], sgIdx = -1;
 
 function currentList() {
-  return (loaded || coreLoaded) ? recordsFor(combinedSessions, cur.name)[cur.status] : [];
+  return (loaded || coreLoaded) ? recordsFor(sessionsFor(cur.name), cur.name)[cur.status] : [];
 }
 
 function renderRecords() {

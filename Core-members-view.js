@@ -11,12 +11,40 @@ if (!window.bsAttDates) {
     const src = { main: new Set(), core: new Set() };
     window.bsAttDates = {
       set: function (source, dates) {
-        src[source] = new Set(dates);
-        window.dispatchEvent(new Event("bs:attdates"));
+        const next = new Set(dates), prev = src[source];
+        let same = prev.size === next.size;
+        if (same) next.forEach(function (d) { if (!prev.has(d)) same = false; });
+        src[source] = next;
+        if (!same) window.dispatchEvent(new Event("bs:attdates"));   // sirf tab jab dates sach me badli (har tick par calendar redraw nahi)
       },
       has: function (iso) { return src.main.has(iso) || src.core.has(iso); }
     };
   })();
+}
+
+// ── Core drafts: har date + mode ka sirf EK current draft slot ───────────────────────────
+// (Core-members-view.js me bhi yahi function hai; jo pehle load ho wahi window par rakh deta hai.)
+// localStorage "bs-core-ticks-v1": naya format "yyyy-mm-dd|online|offline" -> {state, dateKey, mode, t}.
+// Purana format sirf "yyyy-mm-dd" (bina mode): wo us date ke apne mode (entry me mode ho to wahi, warna Offline)
+// ke slot me jaata hai, lekin sirf tab jab us slot me naya draft na ho. Isse purane draft kabhi extra session nahi bante.
+if (!window.bsNormalizeCoreDrafts) {
+  window.bsNormalizeCoreDrafts = function (raw) {
+    const slots = {};
+    if (!raw || typeof raw !== "object") return slots;
+    const RE_NEW = /^(\d{4}-\d{2}-\d{2})\|(online|offline)$/, RE_OLD = /^\d{4}-\d{2}-\d{2}$/;
+    const ok = function (d) { return d && typeof d === "object" && d.state && typeof d.state === "object"; };
+    Object.keys(raw).forEach(function (key) {
+      const m = key.match(RE_NEW);
+      if (m && ok(raw[key])) slots[key] = { state: raw[key].state, dateKey: m[1], mode: m[2], t: raw[key].t || 0, legacy: false };
+    });
+    Object.keys(raw).forEach(function (key) {
+      if (!RE_OLD.test(key) || !ok(raw[key])) return;
+      const mode = (raw[key].mode === "online" || raw[key].mode === "offline") ? raw[key].mode : "offline";
+      const slot = key + "|" + mode;
+      if (!slots[slot]) slots[slot] = { state: raw[key].state, dateKey: key, mode: mode, t: raw[key].t || 0, legacy: true };
+    });
+    return slots;
+  };
 }
 
 const CM_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyISnoSu8t4ESuLdamI8HkvXw7PuoDCZipUtA96XSsNn5Bc1VadVKfgQkiLt7Q7lsa-QA/exec";
@@ -49,14 +77,18 @@ let cmState = {};
 let cmMode = "online";
 let cmAttPanelVisible = true;
 let cmCalYear, cmCalMonth;
-let cmGreenDates = new Set();
 let cmSelectedDate = null;
 let cmAllSessions = [];
 // Har date ke ticks browser me yaad rakhte hain (localStorage), taaki date badalne / refresh par na jayein
 const CM_DRAFT_KEY = "bs-core-ticks-v1";
-let cmDrafts = cmReadDrafts();   // { "yyyy-mm-dd": { state: {name: status|null}, t: ms } }
+// Drafts har baar localStorage se taaza padhe jaate hain (cmDraftSlots) -- doosre tab ka badlaav bhi dikhe, aur
+// likhte waqt doosre tab ya doosri date ka kuch overwrite na ho.
 let cmLoading = false;           // date load ho rahi hai: us dauran tick ignore (galat date me na likhe)
-let cmEditingDate = null;   // Edit mode me jis saved date ko edit kar rahe hain (null = normal)
+let cmEditing = null;       // Edit mode: { id, date, mode, title, orig, prev } -- ek EXACT saved session (null = nayi session ka workspace)
+let cmActiveId = null;      // Sessions panel me jo session abhi khula / edit ho raha hai
+let cmViewId = null;        // view page par kaunsa saved session (null = workspace ki abhi ki ticks)
+let cmViewDateKey = null;   // view page ki date (download file ke naam ke liye)
+let cmSaving = false;       // Save/Update chal raha hai: dobara dabane par duplicate session na bane
 let cmColorBook = {};       // dateKey -> session ka rang (is page-load me stable)
 let cmColorNext = 0;        // agla unused rang-index; rang kabhi repeat nahi hote
 let cmExtraMembers = [];   // saved doc ke wo members jo CM_MEMBERS me nahi hain: dikhte hain aur re-save par bache rehte hain
@@ -187,7 +219,7 @@ function initCoreMembers() {
   cmCalMonth = now.getMonth();
   CM_MEMBERS.forEach(m => cmState[m.name] = null);
   cmExtraMembers = [];
-  cmEditingDate = null;
+  cmEditing = null; cmActiveId = null; cmViewId = null;
   cmApplyEditUI();
   cmMode = "online";
   cmAttPanelVisible = true;
@@ -265,7 +297,7 @@ function cmNextMonth() {
   cmBuildCalendar();
 }
 function cmSelectDate(dk) {
-  cmLeaveEditIfOtherDate(dk);
+  if (!cmGuardLeaveEdit()) return;   // edit chal raha ho aur badlaav unsaved ho to pehle poochho
   cmSelectedDate = dk;
   cmBuildCalendar();
   cmLoadDateData(dk);
@@ -275,37 +307,57 @@ function cmSelectDate(dk) {
 // Saved sessions ka EK live listener (pehle har page-open par getDocs tha, jisse naya/delete hua session
 // tabhi dikhta jab page dobara khule). Ab add / save / delete turant calendar aur session list me aate hain.
 let cmSessionsUnsub = null;
+let cmSavedDays = new Set();   // saved sessions ki calendar-dates (calendar green ke liye)
 function cmStartSessionsListener() {
   if (cmSessionsUnsub) return;
   cmSessionsUnsub = onSnapshot(collection(db, "core-attendance"), function (snap) {
-    const list = [];
-    const saved = new Set();
+    const list = [], days = new Set(), ids = new Set();
     snap.forEach(docSnap => {
-      const d = docSnap.data();
-      saved.add(docSnap.id);
-      list.push({ dateKey: docSnap.id, title: d.title || "", mode: d.mode || "online" });
+      const sv = cmMakeSaved(docSnap.id, docSnap.data());
+      if (!sv) return;
+      list.push(sv); days.add(sv.dateKey); ids.add(sv.id);
     });
-    list.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
     cmAllSessions = list;
-    cmGreenDates = saved;   // sirf SAVED dates (Edit / "update" logic isi par chalta hai)
-    // rang purani date se naayi date ke order me baantte hain; hataye gaye session ka rang free, baaki ke rang nahi badalte
-    Object.keys(cmColorBook).forEach(k => { if (!saved.has(k)) delete cmColorBook[k]; });
-    cmAllSessions.slice().reverse().forEach(x => cmColorFor(x.dateKey));
+    cmSortSessions();
+    cmSavedDays = days;
+    // rang session ke doc id par: purane se naye ke order me baante jaate hain; hataye gaye ka rang free, baaki ke nahi badalte
+    Object.keys(cmColorBook).forEach(k => { if (!ids.has(k)) delete cmColorBook[k]; });
+    cmAllSessions.slice().reverse().forEach(x => cmColorFor(x.id));
+    if (cmActiveId && !ids.has(cmActiveId)) cmActiveId = null;
     cmSyncGreen();          // calendar (Core + Attendance) khud redraw hoga
     const sb = document.getElementById("cmSessionSearch");
     cmRenderSessionList(sb ? sb.value : "");
   }, function (e) { console.error("CM sessions listener:", e); cmSessionsUnsub = null; });
 }
 
-// Green dates = saved sessions + wo dates jinke kisi bhi mode ke draft me kam se kam ek tick hai
-function cmSyncGreen() {
-  const dates = new Set(cmGreenDates);
-  Object.keys(cmDrafts).forEach(function (key) {
-    const d = cmDrafts[key];
-    if (!d || !d.state) return;
-    if (!Object.keys(d.state).some(function (n) { return d.state[n]; })) return;
-    dates.add(d.dateKey || key.split("|")[0]);
+// core-attendance doc -> session. id "yyyy-mm-dd" (purana, date ke naam ka) ya "yyyy-mm-dd_mode_cm_xxxx" (naya).
+// Stats (student-profile.js) bhi yahi dono id-format padhta hai.
+function cmMakeSaved(id, d) {
+  const m = id.match(/^(\d{4}-\d{2}-\d{2})(?:_(online|offline)_cm_[a-z0-9]+)?$/);
+  if (!m) return null;
+  d = d || {};
+  const mode = (d.mode === "online" || d.mode === "offline") ? d.mode : (m[2] || "online");
+  const ms = d.savedAt ? new Date(d.savedAt).getTime() : 0;
+  return { id: id, dateKey: m[1], title: d.title || "", mode: mode, members: Array.isArray(d.members) ? d.members : [], savedMs: isNaN(ms) ? 0 : ms };
+}
+function cmSortSessions() {
+  cmAllSessions.sort((a, b) => {
+    if (a.dateKey !== b.dateKey) return a.dateKey < b.dateKey ? 1 : -1;
+    if (a.savedMs !== b.savedMs) return b.savedMs - a.savedMs;
+    return a.id < b.id ? 1 : -1;
   });
+}
+function cmSavedById(id) { return cmAllSessions.find(x => x.id === id) || null; }
+
+function cmDraftHasTicks(d) {
+  return !!(d && d.state && Object.keys(d.state).some(function (n) { return d.state[n] === "present" || d.state[n] === "half"; }));
+}
+
+// Green dates = saved sessions + wo dates jinke kisi bhi mode ke draft slot me kam se kam ek tick hai
+function cmSyncGreen() {
+  const dates = new Set(cmSavedDays);
+  const slots = cmDraftSlots();
+  Object.keys(slots).forEach(function (k) { if (cmDraftHasTicks(slots[k])) dates.add(slots[k].dateKey); });
   window.bsAttDates.set("core", dates);
 }
 
@@ -313,60 +365,72 @@ function cmSyncGreen() {
 window.addEventListener("bs:enter", function () { cmSyncGreen(); cmStartSessionsListener(); });
 // Registry badalte hi (Attendance ya Core Members) is page ka calendar redraw
 window.addEventListener("bs:attdates", function () { cmBuildCalendar(); });
+// doosre tab me draft badle to is tab ka green bhi sahi rahe
+window.addEventListener("storage", function (e) { if (e.key === CM_DRAFT_KEY) cmSyncGreen(); });
 
-async function cmLoadDateData(dk, ignoreDraft) {
+// Date chunne par main screen us date + mode ka (ek) draft dikhati hai. Saved sessions yahan nahi khulte --
+// wo Sessions panel se khulte hain (View / Edit), taaki koi saved session galti se na badal jaye.
+function cmLoadDateData(dk) {
   cmExtraMembers = [];   // pichli date ke extra members kabhi nayi date me na jayein
-  cmLoading = true;
-  try {
-    const docSnap = await getDoc(doc(db, "core-attendance", dk));
-    CM_MEMBERS.forEach(m => cmState[m.name] = null);
-    if (docSnap.exists()) {
-      const d = docSnap.data();
-      cmMode = d.mode || "online";
-      document.getElementById("cmEventInput").value = d.title || "";
-      document.getElementById("cmOnlineBtn").classList.toggle("active", cmMode === "online");
-      document.getElementById("cmOfflineBtn").classList.toggle("active", cmMode === "offline");
-      (d.members || []).forEach(m => {
-        if (!m || !m.name) return;
-        const nm = cmCanon(m.name);
-        if (Object.prototype.hasOwnProperty.call(cmState, nm)) cmState[nm] = m.status;
-        else cmExtraMembers.push({ name: nm, status: m.status || "absent" });
-      });
-    } else {
-      document.getElementById("cmEventInput").value = "";   // nayi date: purani date ka title na bache
-    }
-    // is date ke yaad rakhe (unsaved) ticks saved record par bhaari hain.
-    // Saved Sessions ka view (ignoreDraft) hamesha saved record dikhata hai.
-    if (!ignoreDraft) cmApplyDraft(dk);
-    cmRenderMembers(document.getElementById("cmSearchBar").value);
-    return true;
-  } catch (e) { console.error("CM load date:", e); return false; }
-  finally { cmLoading = false; }
+  CM_MEMBERS.forEach(m => cmState[m.name] = null);
+  document.getElementById("cmEventInput").value = "";
+  // Draft sirf doosre mode me ho aur current mode me kuch na ho, to wahi mode kholo (warna draft screen par dikhta hi nahi)
+  const slots = cmDraftSlots();
+  const other = cmMode === "online" ? "offline" : "online";
+  if (!cmDraftHasTicks(slots[cmDraftKey(dk, cmMode)]) && cmDraftHasTicks(slots[cmDraftKey(dk, other)])) {
+    cmMode = other;
+    document.getElementById("cmOnlineBtn").classList.toggle("active", cmMode === "online");
+    document.getElementById("cmOfflineBtn").classList.toggle("active", cmMode === "offline");
+  }
+  cmApplyDraft(dk);
+  cmRenderMembers(document.getElementById("cmSearchBar").value);
+  return true;
 }
 
+// Save: HAR nayi session ka apna alag doc ("yyyy-mm-dd_mode_cm_xxxx"), kisi purane ko overwrite nahi karta.
+// Edit mode me "update": usi exact doc (cmEditing.id) me merge, naya doc nahi banta.
 async function cmSaveData() {
-  const dk = cmSelectedDate || cmTodayKey();
+  if (cmSaving) return;
   const title = document.getElementById("cmEventInput").value.trim();
   const members = CM_MEMBERS.map(m => ({ name: m.name, status: cmState[m.name] || "absent" }))
     .concat(cmExtraMembers.map(m => ({ name: m.name, status: m.status })));
-  const payload = { date: dk, title, mode: cmMode, members, savedAt: new Date().toISOString() };
+  const btn = document.getElementById("cmSaveBtn");
+  cmSaving = true; if (btn) btn.disabled = true;
 
   try {
-    await setDoc(doc(db, "core-attendance", dk), payload, { merge: true });   // same date doc update, doosre fields bache rehte hain
-    cmGreenDates.add(dk);
-    cmDraftDelete(dk);   // ab saved record hi latest hai (isme cmSyncGreen bhi chalta hai)
-    cmSelectedDate = dk;
-    cmBuildCalendar();
-    const ex = cmAllSessions.find(s => s.dateKey === dk);
-    if (ex) { ex.title = title; ex.mode = cmMode; }
-    else cmAllSessions.unshift({ dateKey: dk, title, mode: cmMode });
+    if (cmEditing) {
+      const ed = cmEditing;
+      await setDoc(doc(db, "core-attendance", ed.id), { title, members, updatedAt: new Date().toISOString() }, { merge: true });
+      const ex = cmSavedById(ed.id);
+      if (ex) { ex.title = title; ex.members = members; }
+      cmPushToSheets({ date: ed.date, title, mode: ed.mode, members, savedAt: new Date().toISOString() });
+      cmExitEdit();   // workspace wapas jaisa tha waisa
+      alert("✅ Attendance updated!");
+    } else {
+      const dk = cmSelectedDate || cmTodayKey();
+      const mode = cmMode;
+      const id = dk + "_" + mode + "_cm_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      const payload = { date: dk, title, mode, members, savedAt: new Date().toISOString() };
+      await setDoc(doc(db, "core-attendance", id), payload);
+      cmDraftDeleteSlot(dk, mode);   // sirf is date + mode ka draft; doosre mode ka draft jaisa tha waisa
+      cmSelectedDate = dk;
+      cmAllSessions.unshift({ id: id, dateKey: dk, title, mode, members, savedMs: Date.now() });
+      cmSortSessions();
+      cmSavedDays.add(dk);
+      cmColorFor(id);
+      // workspace khaali: agla session nayi ticks se shuru (Save ke baad ticks screen par rehne se duplicate ban jate the)
+      CM_MEMBERS.forEach(m => cmState[m.name] = null);
+      cmExtraMembers = [];
+      document.getElementById("cmEventInput").value = "";
+      cmRenderMembers(document.getElementById("cmSearchBar").value);
+      cmSyncGreen();
+      cmBuildCalendar();
+      cmPushToSheets(payload);
+      alert("✅ Attendance saved!");
+    }
     cmRenderSessionList(document.getElementById("cmSessionSearch").value);
-    cmPushToSheets(payload);
-    const wasEditing = !!cmEditingDate;
-    cmEditingDate = null;
-    cmApplyEditUI();
-    alert(wasEditing ? "✅ Attendance updated!" : "✅ Attendance saved!");
   } catch (e) { console.error("CM save:", e); alert("❌ Save failed: " + e.message); }
+  finally { cmSaving = false; if (btn) btn.disabled = false; }
 }
 
 function cmTodayKey() {
@@ -443,7 +507,7 @@ function cmRenderSessionList(filter) {
   const ul = document.getElementById("cmSessionList");
   if (!ul) return;
   ul.innerHTML = "";
-  const lf = filter.toLowerCase();
+  const lf = (filter || "").toLowerCase();
   const list = cmAllSessions.filter(s =>
     s.dateKey.includes(lf) || (s.title||"").toLowerCase().includes(lf)
   );
@@ -453,19 +517,9 @@ function cmRenderSessionList(filter) {
   }
   list.forEach(s => {
     const div = document.createElement("div");
-    div.className = "cm-session-item" + (cmSelectedDate === s.dateKey ? " active" : "");
-    div.style.setProperty("--sc", cmColorFor(s.dateKey));   // har session ka apna, alag rang
-    div.onclick = async () => {
-      cmLeaveEditIfOtherDate(s.dateKey);
-      cmSelectedDate = s.dateKey;
-      const [y, mo] = s.dateKey.split("-").map(Number);
-      cmCalYear = y; cmCalMonth = mo - 1;
-      cmBuildCalendar();
-      cmRenderSessionList(document.getElementById("cmSessionSearch").value);
-      // saved doc load karke View Attendance format me dikhao (Download as Image neeche), Edit se main screen par
-      if (await cmLoadDateData(s.dateKey, true)) cmOpenViewPage();
-      else alert("❌ Couldn't load this session. Please try again.");
-    };
+    div.className = "cm-session-item" + (cmActiveId === s.id ? " active" : "");
+    div.style.setProperty("--sc", cmColorFor(s.id));   // har session ka apna, alag rang
+    div.onclick = () => cmOpenSavedSession(s.id);
 
     const text = document.createElement("div");
     text.className = "cm-session-text";
@@ -529,7 +583,7 @@ function cmConfirmDelete(s) {
   q.textContent = "Are you sure you want to delete this title?";
   const sub = document.createElement("p");
   sub.className = "cm-confirm-sub";
-  sub.textContent = (s.title || "(no title)") + " · " + s.dateKey;
+  sub.textContent = (s.title || "(no title)") + " · " + s.dateKey + " · " + s.mode;
 
   const btns = document.createElement("div");
   btns.className = "cm-confirm-btns";
@@ -564,76 +618,97 @@ function cmConfirmDelete(s) {
 }
 
 // Is date ka saved session (core-attendance doc, id = date) delete karo
+// Sirf yehi saved session (doc id) delete hota hai. Drafts aur doosre sessions ko haath nahi lagta.
 async function cmDeleteSession(s) {
   try {
-    await deleteDoc(doc(db, "core-attendance", s.dateKey));
+    await deleteDoc(doc(db, "core-attendance", s.id));
   } catch (e) {
     console.error("CM delete:", e);
     alert("❌ Delete failed: " + e.message);
     return;
   }
-  cmAllSessions = cmAllSessions.filter(x => x.dateKey !== s.dateKey);
-  cmGreenDates.delete(s.dateKey);
-  cmDraftDelete(s.dateKey);
-  delete cmColorBook[s.dateKey];
-  if (cmEditingDate === s.dateKey) { cmEditingDate = null; cmApplyEditUI(); }
-
-  // agar yehi date main screen par khuli thi to uska data bhi saaf (warna Save se wapas ban jata)
-  if (cmSelectedDate === s.dateKey) {
-    CM_MEMBERS.forEach(m => cmState[m.name] = null);
-    cmExtraMembers = [];
-    document.getElementById("cmEventInput").value = "";
-    cmRenderMembers(document.getElementById("cmSearchBar").value);
-  }
+  cmAllSessions = cmAllSessions.filter(x => x.id !== s.id);
+  cmSavedDays = new Set(cmAllSessions.map(x => x.dateKey));
+  delete cmColorBook[s.id];
+  if (cmEditing && cmEditing.id === s.id) cmExitEdit();
+  if (cmViewId === s.id) { cmViewId = null; cmBackToMain(); }
+  if (cmActiveId === s.id) cmActiveId = null;
+  cmSyncGreen();
   cmBuildCalendar();
   cmRenderSessionList(document.getElementById("cmSessionSearch").value);
 }
 
 // ── PER-DATE TICK DRAFTS ──────────────────────────────────────────────────────
-function cmReadDrafts() {
+function cmReadRaw() {
   try {
     const raw = localStorage.getItem(CM_DRAFT_KEY);
     const o = raw ? JSON.parse(raw) : {};
-    return (o && typeof o === "object") ? o : {};
+    return (o && typeof o === "object" && !Array.isArray(o)) ? o : {};
   } catch (e) { return {}; }
 }
-function cmWriteDrafts() {
-  try { localStorage.setItem(CM_DRAFT_KEY, JSON.stringify(cmDrafts)); }
+function cmWriteRaw(raw) {
+  try { localStorage.setItem(CM_DRAFT_KEY, JSON.stringify(raw)); }
   catch (e) { console.warn("CM drafts save failed:", e); }
+  window.dispatchEvent(new Event("bs:core-drafts"));   // student-profile.js stats turant dobara ginti kare
+  cmSyncGreen();
 }
+// date + mode ke "current" draft slots (purane date-only draft bhi yahin ek slot ban kar aate hain)
+function cmDraftSlots() { return window.bsNormalizeCoreDrafts(cmReadRaw()); }
 function cmDraftDate() { return cmSelectedDate || cmTodayKey(); }
 // Draft key includes mode so Online and Offline have separate slots
 function cmDraftKey(dk, mode) { return dk + "|" + (mode || cmMode); }
 
-// Abhi ki ticks is date+mode ke naam se yaad rakho
+// Purana date-only draft ("yyyy-mm-dd") agar isi date + mode ke slot ka hai to hata do -- slot ab naye key me hai
+// (ya khaali ho gaya), warna wo wapas dikh/ginta. Baaki sab keys ko haath nahi lagta.
+function cmDropLegacyFor(raw, dk, mode) {
+  const d = raw[dk];
+  if (!d || typeof d !== "object" || !d.state) return;
+  const m = (d.mode === "online" || d.mode === "offline") ? d.mode : "offline";
+  if (m === mode) delete raw[dk];
+}
+
+// Abhi ki ticks is date + mode ke EK slot me: har baar usi slot ko overwrite karta hai (history nahi),
+// aur saari ticks hat jayein to slot hat jata hai (session ginti se bahar). Edit mode me draft ko haath nahi lagta.
 function cmDraftSave(dk) {
-  const key = cmDraftKey(dk, cmMode);
+  // Date load / edit ke dauran cmState kisi aur record ka ho sakta hai; use draft me likhne se phantom session banta tha.
+  if (cmLoading || cmEditing) return;
+  const raw = cmReadRaw();
+  const slot = cmDraftKey(dk, cmMode);
   const state = {};
   CM_MEMBERS.forEach(m => { state[m.name] = cmState[m.name] || null; });
   const empty = CM_MEMBERS.every(m => !state[m.name]);
-  if (empty && !cmGreenDates.has(dk)) delete cmDrafts[key];
-  else cmDrafts[key] = { state, dateKey: dk, mode: cmMode, t: Date.now() };
-  cmWriteDrafts();
-  cmSyncGreen();   // tick / clear hote hi date green ya normal
+  const beforeDrop = JSON.stringify(raw);
+  cmDropLegacyFor(raw, dk, cmMode);
+  const hadLegacy = JSON.stringify(raw) !== beforeDrop;   // purana date-only draft isi slot ka tha (ab hata diya)
+  if (empty) delete raw[slot];
+  else {
+    // Kuch badla hi nahi (jaise sirf Online/Offline switch hua): dobara likhne ki zaroorat nahi
+    const cur = raw[slot];
+    if (!hadLegacy && cur && cur.state && JSON.stringify(cur.state) === JSON.stringify(state)) return;
+    raw[slot] = { state, dateKey: dk, mode: cmMode, t: Date.now() };
+  }
+  cmWriteRaw(raw);
 }
-function cmDraftDelete(dk) {
-  // Delete both mode slots for this date
-  const keyOn  = cmDraftKey(dk, "online");
-  const keyOff = cmDraftKey(dk, "offline");
-  if (cmDrafts[keyOn])  { delete cmDrafts[keyOn];  cmWriteDrafts(); }
-  if (cmDrafts[keyOff]) { delete cmDrafts[keyOff]; cmWriteDrafts(); }
-  cmSyncGreen();
+// Sirf is date + mode ka slot hatao (Save ke baad). Doosre mode ka draft aur baaki sab jaisa tha waisa.
+function cmDraftDeleteSlot(dk, mode) {
+  const raw = cmReadRaw();
+  const before = JSON.stringify(raw);
+  delete raw[cmDraftKey(dk, mode)];
+  cmDropLegacyFor(raw, dk, mode);
+  if (JSON.stringify(raw) !== before) cmWriteRaw(raw);
+  else cmSyncGreen();
 }
-// Is date+mode ke yaad rakhe ticks main screen ke state me daalo. true = draft mila
+// Is date+mode ke slot ke ticks main screen ke state me daalo. true = draft mila
 function cmApplyDraft(dk) {
-  const d = cmDrafts[cmDraftKey(dk, cmMode)];
+  const d = cmDraftSlots()[cmDraftKey(dk, cmMode)];
   if (!d || !d.state) {
     // No draft for this mode — clear state so other mode's ticks don't show
     CM_MEMBERS.forEach(m => { cmState[m.name] = null; });
     return false;
   }
   CM_MEMBERS.forEach(m => {
-    cmState[m.name] = d.state[m.name] || cmLegacyNames(m.name).map(k => d.state[k]).find(Boolean) || null;
+    const v = d.state[m.name] || cmLegacyNames(m.name).map(k => d.state[k]).find(Boolean) || null;
+    cmState[m.name] = (v === "present" || v === "half") ? v : null;
   });
   return true;
 }
@@ -641,15 +716,86 @@ function cmApplyDraft(dk) {
 // ── EDIT MODE (save title -> update) ──────────────────────────────────────────
 function cmApplyEditUI() {
   const b = document.getElementById("cmSaveBtn");
-  if (b) b.textContent = cmEditingDate ? "update" : "save title";
+  if (b) b.textContent = cmEditing ? "update" : "save title";
 }
-function cmLeaveEditIfOtherDate(dk) {
-  if (cmEditingDate && cmEditingDate !== dk) { cmEditingDate = null; cmApplyEditUI(); }
+// Working copy ki marks (present/half) ek stable string me -- "badlaav hua ya nahi" jaanne ke liye
+function cmMarksKey() {
+  const o = {};
+  CM_MEMBERS.forEach(m => { if (cmState[m.name]) o[m.name] = cmState[m.name]; });
+  cmExtraMembers.forEach(m => { if (m.status === "present" || m.status === "half") o[m.name] = m.status; });
+  return Object.keys(o).sort().map(k => k + ":" + o[k]).join("|");
+}
+function cmEditDirty() {
+  return !!cmEditing && (cmMarksKey() !== cmEditing.orig || document.getElementById("cmEventInput").value.trim() !== cmEditing.title);
+}
+// Edit chhodne se pehle (doosri date chunna / doosre session ka Edit): unsaved badlaav ho to poochho. false = ruko.
+function cmGuardLeaveEdit() {
+  if (!cmEditing) return true;
+  if (cmEditDirty() && !confirm("Discard your changes to this session?")) return false;
+  cmExitEdit();
+  return true;
+}
+// Edit mode se bahar: nayi session ka workspace (date, mode, title, ticks) bilkul waisa jaisa edit se pehle tha
+function cmExitEdit() {
+  const ed = cmEditing;
+  if (!ed) return;
+  cmEditing = null;
+  const p = ed.prev;
+  CM_MEMBERS.forEach(m => { cmState[m.name] = p.state[m.name] || null; });
+  cmExtraMembers = p.extras;
+  cmMode = p.mode;
+  cmSelectedDate = p.date;
+  cmCalYear = p.calYear; cmCalMonth = p.calMonth;
+  document.getElementById("cmEventInput").value = p.title;
+  document.getElementById("cmOnlineBtn").classList.toggle("active", cmMode === "online");
+  document.getElementById("cmOfflineBtn").classList.toggle("active", cmMode === "offline");
+  cmApplyEditUI();
+  cmBuildCalendar();
+  cmRenderMembers(document.getElementById("cmSearchBar").value);
+  cmRenderSessionList(document.getElementById("cmSessionSearch").value);
+}
+// Is exact saved session ko edit karo (working copy main screen par; drafts ko haath nahi lagta)
+function cmEnterEdit(sv) {
+  if (cmEditing) {
+    if (cmEditing.id === sv.id) { cmBackToMain(); return; }
+    if (!cmGuardLeaveEdit()) return;
+  }
+  const prev = {
+    date: cmSelectedDate, mode: cmMode, title: document.getElementById("cmEventInput").value,
+    state: Object.assign({}, cmState), extras: cmExtraMembers.slice(), calYear: cmCalYear, calMonth: cmCalMonth
+  };
+  CM_MEMBERS.forEach(m => { cmState[m.name] = null; });
+  cmExtraMembers = [];
+  (sv.members || []).forEach(m => {
+    if (!m || !m.name) return;
+    const nm = cmCanon(m.name);
+    if (Object.prototype.hasOwnProperty.call(cmState, nm)) cmState[nm] = (m.status === "present" || m.status === "half") ? m.status : null;
+    else cmExtraMembers.push({ name: nm, status: m.status || "absent" });
+  });
+  cmMode = sv.mode;
+  cmSelectedDate = sv.dateKey;
+  const [y, mo] = sv.dateKey.split("-").map(Number);
+  cmCalYear = y; cmCalMonth = mo - 1;
+  document.getElementById("cmEventInput").value = sv.title || "";
+  document.getElementById("cmOnlineBtn").classList.toggle("active", cmMode === "online");
+  document.getElementById("cmOfflineBtn").classList.toggle("active", cmMode === "offline");
+  cmEditing = { id: sv.id, date: sv.dateKey, mode: sv.mode, title: (sv.title || "").trim(), orig: cmMarksKey(), prev: prev };
+  cmActiveId = sv.id;
+  cmAttPanelVisible = true;
+  const body = document.getElementById("cmAttBody");
+  if (body) body.style.display = "flex";
+  cmApplyEditUI();
+  cmBuildCalendar();
+  cmRenderMembers(document.getElementById("cmSearchBar").value);
+  cmRenderSessionList(document.getElementById("cmSessionSearch").value);
+  cmBackToMain();
+  window.scrollTo(0, 0);
 }
 
 // ── CONTROLS ──────────────────────────────────────────────────────────────────
 function cmSetMode(mode) {
   if (cmMode === mode) return;
+  if (cmEditing) return;   // edit ke dauran mode locked (session ka mode nahi badalta)
   // Save current mode's draft before switching
   cmDraftSave(cmDraftDate());
   cmMode = mode;
@@ -667,6 +813,30 @@ function cmToggleAttPanel() {
 }
 
 // ── VIEW PAGE ─────────────────────────────────────────────────────────────────
+// View page ka common renderer. v = { date, mode, title, present:[{name,dark}], half:[...], absent:[...] }
+function cmRenderViewPage(v) {
+  cmViewDateKey = v.date;
+  document.getElementById("cmViewDate").textContent     = v.date;
+  document.getElementById("cmViewTitle").textContent    = v.title ? ` — ${v.title}` : "";
+  document.getElementById("cmViewModeTag").textContent  = v.mode === "online" ? "Online" : "Offline";
+  document.getElementById("cmViewPresentH").textContent = `✅ Present (${v.present.length})`;
+  document.getElementById("cmViewHalfH").textContent    = `🟡 Half Present (${v.half.length})`;
+  document.getElementById("cmViewAbsentH").textContent  = `❌ Absent (${v.absent.length})`;
+
+  const renderCol = (id, arr) => {
+    document.getElementById(id).innerHTML = arr.length
+      ? arr.map(m => `<div class="cm-view-name" style="border-left:3px solid ${m.dark};padding-left:6px">${cmEsc(m.name)}</div>`).join("")
+      : `<div class="cm-view-name" style="color:#bbb">—</div>`;
+  };
+  renderCol("cmViewPresent", v.present);
+  renderCol("cmViewHalf",    v.half);
+  renderCol("cmViewAbsent",  v.absent);
+
+  document.getElementById("cm-main-view").style.display  = "none";
+  document.getElementById("cm-view-page").style.display  = "block";
+}
+
+// "view attendance" button: main screen ki abhi ki ticks (draft ya edit ki working copy)
 function cmOpenViewPage() {
   const present = [], half = [], absent = [];
   CM_MEMBERS.forEach(m => {
@@ -683,56 +853,57 @@ function cmOpenViewPage() {
     else                             absent.push(e);
   });
 
-  const dk    = cmSelectedDate || cmTodayKey();
-  const title = (document.getElementById("cmEventInput").value.trim());
+  cmViewId = null;
+  cmRenderViewPage({
+    date: cmEditing ? cmEditing.date : (cmSelectedDate || cmTodayKey()),
+    mode: cmMode,
+    title: document.getElementById("cmEventInput").value.trim(),
+    present, half, absent
+  });
+}
 
-  document.getElementById("cmViewDate").textContent     = dk;
-  document.getElementById("cmViewTitle").textContent    = title ? ` — ${title}` : "";
-  document.getElementById("cmViewModeTag").textContent  = cmMode === "online" ? "Online" : "Offline";
-  document.getElementById("cmViewPresentH").textContent = `✅ Present (${present.length})`;
-  document.getElementById("cmViewHalfH").textContent    = `🟡 Half Present (${half.length})`;
-  document.getElementById("cmViewAbsentH").textContent  = `❌ Absent (${absent.length})`;
-
-  const renderCol = (id, arr) => {
-    document.getElementById(id).innerHTML = arr.length
-      ? arr.map(m => `<div class="cm-view-name" style="border-left:3px solid ${m.dark};padding-left:6px">${cmEsc(m.name)}</div>`).join("")
-      : `<div class="cm-view-name" style="color:#bbb">—</div>`;
-  };
-  renderCol("cmViewPresent", present);
-  renderCol("cmViewHalf",    half);
-  renderCol("cmViewAbsent",  absent);
-
-  document.getElementById("cm-main-view").style.display  = "none";
-  document.getElementById("cm-view-page").style.display  = "block";
+// Sessions panel me click: usi saved session (doc id) ko cache se dikhao. Main screen / drafts / date nahi badalte.
+function cmOpenSavedSession(id) {
+  const sv = cmSavedById(id);
+  if (!sv) { alert("❌ Couldn't load this session. Please try again."); return; }
+  cmActiveId = id;
+  cmRenderSessionList(document.getElementById("cmSessionSearch").value);
+  const status = {};
+  (sv.members || []).forEach(m => { if (m && m.name) status[cmCanon(m.name)] = m.status; });
+  const present = [], half = [], absent = [];
+  CM_MEMBERS.forEach(m => {
+    if      (status[m.name] === "present") present.push(m);
+    else if (status[m.name] === "half")    half.push(m);
+    else                                    absent.push(m);
+  });
+  const known = new Set(CM_MEMBERS.map(m => m.name));
+  Object.keys(status).forEach(nm => {
+    if (known.has(nm)) return;
+    const e = { name: nm, dark: "#999" };
+    if      (status[nm] === "present") present.push(e);
+    else if (status[nm] === "half")    half.push(e);
+    else                                absent.push(e);
+  });
+  cmRenderViewPage({ date: sv.dateKey, mode: sv.mode, title: sv.title, present, half, absent });
+  cmViewId = id;
 }
 
 function cmBackToMain() {
   document.getElementById("cm-view-page").style.display  = "none";
   document.getElementById("cm-main-view").style.display  = "block";
-  // view page saved record dikha rahi ho sakti hai; main screen par is date ke latest (yaad rakhe) ticks hi rahein
-  if (cmApplyDraft(cmDraftDate())) cmRenderMembers(document.getElementById("cmSearchBar").value);
 }
 
 function cmEsc(t) {
   return String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-// Edit: is date ka saved data (naam, mode, saare statuses) main screen par khulta hai.
-// Save dabane par wahi date-doc update hota hai (id = date), duplicate nahi banta.
+// Edit (view page): agar yeh koi saved session dikha raha hai to EXACT wahi session edit mode me khulta hai (update usi doc ko);
+// agar main screen ki abhi ki ticks dikha raha hai to bas wapas main screen par.
 function cmEditAttendance() {
-  const dk = cmSelectedDate || cmTodayKey();
-  const [y, mo] = dk.split("-").map(Number);
-  cmCalYear = y; cmCalMonth = mo - 1;
-  cmBuildCalendar();
-  cmRenderMembers(document.getElementById("cmSearchBar").value);
-  cmRenderSessionList(document.getElementById("cmSessionSearch").value);
-  cmAttPanelVisible = true;
-  const body = document.getElementById("cmAttBody");
-  if (body) body.style.display = "flex";
-  cmEditingDate = cmGreenDates.has(dk) ? dk : null;   // saved record hi "update" hota hai
-  cmApplyEditUI();
-  cmBackToMain();
-  window.scrollTo(0, 0);
+  if (!cmViewId) { cmBackToMain(); return; }
+  const sv = cmSavedById(cmViewId);
+  if (!sv) { alert("❌ This session could not be found. It may have been deleted."); cmBackToMain(); return; }
+  cmEnterEdit(sv);
 }
 
 // ── DOWNLOAD ──────────────────────────────────────────────────────────────────
@@ -742,7 +913,7 @@ function cmDownloadAttendance() {
   if (typeof html2canvas !== "undefined") {
     html2canvas(el, { scale: 2, backgroundColor: "#f5f0eb" }).then(canvas => {
       const a = document.createElement("a");
-      a.download = `core-members-${cmSelectedDate || cmTodayKey()}.png`;
+      a.download = `core-members-${cmViewDateKey || cmSelectedDate || cmTodayKey()}.png`;
       a.href = canvas.toDataURL("image/png");
       a.click();
     });

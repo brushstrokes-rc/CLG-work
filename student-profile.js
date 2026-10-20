@@ -29,6 +29,31 @@ function canonName(n) {
 const auth = getAuth(getApp());
 const db   = getFirestore(getApp());
 
+// ── Core drafts: har date + mode ka sirf EK current draft slot ───────────────────────────
+// (Core-members-view.js me bhi yahi function hai; jo pehle load ho wahi window par rakh deta hai.)
+// localStorage "bs-core-ticks-v1": naya format "yyyy-mm-dd|online|offline" -> {state, dateKey, mode, t}.
+// Purana format sirf "yyyy-mm-dd" (bina mode): wo us date ke apne mode (entry me mode ho to wahi, warna Offline)
+// ke slot me jaata hai, lekin sirf tab jab us slot me naya draft na ho. Isse purane draft kabhi extra session nahi bante.
+if (!window.bsNormalizeCoreDrafts) {
+  window.bsNormalizeCoreDrafts = function (raw) {
+    const slots = {};
+    if (!raw || typeof raw !== "object") return slots;
+    const RE_NEW = /^(\d{4}-\d{2}-\d{2})\|(online|offline)$/, RE_OLD = /^\d{4}-\d{2}-\d{2}$/;
+    const ok = function (d) { return d && typeof d === "object" && d.state && typeof d.state === "object"; };
+    Object.keys(raw).forEach(function (key) {
+      const m = key.match(RE_NEW);
+      if (m && ok(raw[key])) slots[key] = { state: raw[key].state, dateKey: m[1], mode: m[2], t: raw[key].t || 0, legacy: false };
+    });
+    Object.keys(raw).forEach(function (key) {
+      if (!RE_OLD.test(key) || !ok(raw[key])) return;
+      const mode = (raw[key].mode === "online" || raw[key].mode === "offline") ? raw[key].mode : "offline";
+      const slot = key + "|" + mode;
+      if (!slots[slot]) slots[slot] = { state: raw[key].state, dateKey: key, mode: mode, t: raw[key].t || 0, legacy: true };
+    });
+    return slots;
+  };
+}
+
 // <pure> — plain logic, no DOM / Firebase (kept separate so it can be tested on its own)
 // A session only counts if at least one student is marked Present/Half in it.
 // (Absence is inferred from "no mark", so a record with zero marks is
@@ -76,17 +101,16 @@ function makeSession(id, date, mode, data) {
 
 // docs: { docId: firestoreData }  ->  counted sessions, newest first, duplicates removed
 function buildSessions(docs) {
-  const all = [], legacy = [], haveDraft = {};
+  const all = [], legacy = [];
   Object.keys(docs).forEach(function (id) {
     let m = id.match(RE_EVENT);
     if (m) { all.push(makeSession(id, m[1], m[2], docs[id])); return; }
     m = id.match(RE_DRAFT);
-    if (m) { haveDraft[m[1] + "|" + m[2]] = true; all.push(makeSession(id, m[1], m[2], docs[id])); return; }
+    if (m) { all.push(makeSession(id, m[1], m[2], docs[id])); return; }
     if (RE_LEGACY.test(id)) legacy.push(id);
   });
-  legacy.forEach(function (id) {
-    if (!haveDraft[id + "|offline"]) all.push(makeSession(id, id, "offline", docs[id]));
-  });
+  // Bina mode wala purana doc hamesha apna alag session hai (date ya Offline draft ke saath mile tab bhi)
+  legacy.forEach(function (id) { all.push(makeSession(id, id, "offline", docs[id])); });
 
   all.sort(function (a, b) {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
@@ -155,7 +179,6 @@ function matchesQuery(s, q) {
 // Draft sessions from localStorage (key "bs-core-ticks-v1") are also included.
 function buildCoreSessions(docs) {
   const all = [];
-  const seenLegacyDates = new Set();
 
   // 1. New saved sessions
   Object.keys(docs).forEach(function (id) {
@@ -174,13 +197,11 @@ function buildCoreSessions(docs) {
     all.push({ id: id, date: dateKey, mode: mode, origin: "core",
                title: d.title || "", marks: marks, markCount: n,
                createdAt: d.savedAt ? new Date(d.savedAt).getTime() : 0 });
-    seenLegacyDates.add(dateKey);
   });
 
-  // 2. Legacy docs ("yyyy-mm-dd") — keep only if no new session for that date
+  // 2. Legacy docs ("yyyy-mm-dd") — har ek apna alag session, us date ke _cm_ docs ke saath bhi
   Object.keys(docs).forEach(function (id) {
     if (!RE_CM_LEGACY.test(id)) return;
-    if (seenLegacyDates.has(id)) return;   // new session already covers this date
     const d = docs[id];
     const marks = Object.create(null);
     let n = 0;
@@ -195,48 +216,24 @@ function buildCoreSessions(docs) {
                createdAt: d.savedAt ? new Date(d.savedAt).getTime() : 0 });
   });
 
-  // 3. Draft sessions from localStorage
-  // Key: "bs-core-ticks-v1"
-  // New structure (after mode-split fix):
-  //   { "yyyy-mm-dd|online":  { state: {name: status|null}, dateKey, mode, t } }
-  //   { "yyyy-mm-dd|offline": { state: {name: status|null}, dateKey, mode, t } }
-  // Each draft key is a separate session (one per date+mode).
-  // Old structure (pre-fix): { "yyyy-mm-dd": { state, t } } — still handled below.
+  // 3. Draft sessions from localStorage (key "bs-core-ticks-v1"): har date + mode ka sirf ek slot,
+  //    aur wo tabhi session hai jab usme kam se kam ek Present/Half mark ho. Saved session hone se draft ruk nahi jata.
   try {
     const raw = localStorage.getItem("bs-core-ticks-v1");
-    const drafts = raw ? JSON.parse(raw) : {};
-    if (drafts && typeof drafts === "object") {
-      Object.keys(drafts).forEach(function (draftKey) {
-        const draft = drafts[draftKey];
-        if (!draft || !draft.state) return;
-
-        // Determine dateKey and mode from the key or stored fields
-        let dateKey, mode;
-        const modeMatch = draftKey.match(/^(\d{4}-\d{2}-\d{2})\|(online|offline)$/);
-        if (modeMatch) {
-          dateKey = modeMatch[1];
-          mode    = modeMatch[2];
-        } else if (/^\d{4}-\d{2}-\d{2}$/.test(draftKey)) {
-          // Old format — date only, no mode stored
-          dateKey = draftKey;
-          mode    = draft.mode || "offline";
-        } else {
-          return; // unknown key format
-        }
-
-        const state = draft.state;
-        const marks = Object.create(null);
-        let n = 0;
-        Object.keys(state).forEach(function (name) {
-          const st = normStatus(state[name]);
-          if (st) { marks[canonName(name)] = st; n++; }
-        });
-        if (n === 0 && !COUNT_EMPTY_SESSIONS) return;
-        all.push({ id: "draft-" + draftKey, date: dateKey, mode: mode, origin: "core",
-                   title: "", marks: marks, markCount: n,
-                   createdAt: draft.t || 0 });
+    const slots = window.bsNormalizeCoreDrafts(raw ? JSON.parse(raw) : {});
+    Object.keys(slots).forEach(function (slotKey) {
+      const slot = slots[slotKey];
+      const marks = Object.create(null);
+      let n = 0;
+      Object.keys(slot.state).forEach(function (name) {
+        const st = normStatus(slot.state[name]);
+        if (st) { marks[canonName(name)] = st; n++; }
       });
-    }
+      if (n === 0 && !COUNT_EMPTY_SESSIONS) return;
+      all.push({ id: "draft-" + slotKey, date: slot.dateKey, mode: slot.mode, origin: "core",
+                 title: "", marks: marks, markCount: n,
+                 createdAt: slot.t || 0 });
+    });
   } catch (e) { /* localStorage unavailable */ }
 
   // Sort newest first, deduplicate only by id (same Firestore doc read twice)
@@ -266,6 +263,7 @@ let coreLoaded    = false;
 let loadError     = false;
 let unsub         = null;
 let coreUnsub     = null;
+let coreDocs      = {};   // last core-attendance snapshot (drafts change without a snapshot, so we rebuild from this)
 const cur = { name: "", status: "present", origin: "attendance" };
 
 function make(tag, cls, text) {
@@ -325,6 +323,7 @@ function startListener() {
     coreUnsub = onSnapshot(collection(db, "core-attendance"), function (snap) {
       const docs = {};
       snap.forEach(function (d) { docs[d.id] = d.data(); });
+      coreDocs     = docs;
       coreSessions = buildCoreSessions(docs);
       coreLoaded   = true;
       rebuildCombined();
@@ -364,13 +363,24 @@ function rebuildCombined() {
   combinedSessions = out;
 }
 
+// Core Members drafts localStorage me rehte hain, Firestore me nahi -- unke badalne par koi snapshot nahi aata,
+// isliye stats purani rehti thi (tick hatane / clear karne ke baad bhi session ginta tha). Ab turant dobara banate hain.
+function rebuildCoreFromDrafts() {
+  if (!coreLoaded) return;
+  coreSessions = buildCoreSessions(coreDocs);
+  rebuildCombined();
+  refresh();
+}
+window.addEventListener("bs:core-drafts", rebuildCoreFromDrafts);
+window.addEventListener("storage", function (e) { if (e.key === "bs-core-ticks-v1") rebuildCoreFromDrafts(); });   // doosre tab me badla ho to
+
 onAuthStateChanged(auth, function (user) {
   if (user) startListener();
   else {
     if (unsub)     { unsub();     unsub     = null; }
     if (coreUnsub) { coreUnsub(); coreUnsub = null; }
     loaded = false; coreLoaded = false;
-    sessions = []; coreSessions = []; combinedSessions = [];
+    sessions = []; coreSessions = []; combinedSessions = []; coreDocs = {};
   }
 });
 

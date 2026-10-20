@@ -148,8 +148,11 @@ if (!window.bsAttDates) {
     const src = { main: new Set(), core: new Set() };
     window.bsAttDates = {
       set: function (source, dates) {
-        src[source] = new Set(dates);
-        window.dispatchEvent(new Event("bs:attdates"));
+        const next = new Set(dates), prev = src[source];
+        let same = prev.size === next.size;
+        if (same) next.forEach(function (d) { if (!prev.has(d)) same = false; });
+        src[source] = next;
+        if (!same) window.dispatchEvent(new Event("bs:attdates"));   // sirf tab jab dates sach me badli (har tick par calendar redraw nahi)
       },
       has: function (iso) { return src.main.has(iso) || src.core.has(iso); }
     };
@@ -160,7 +163,11 @@ if (!window.bsAttDates) {
 // (Khaali draft doc -- jaise tick undo karne ke baad bacha {} -- green nahi karta.)
 function syncMainGreenDates() {
   const dates = new Set();
-  eventDocs.forEach(function (s) { if (s && s.date) dates.add(s.date); });
+  eventDocs.forEach(function (s) {
+    if (!s || !s.date) return;
+    if (s.legacy && !Object.keys(s.marks).length) return;   // khaali purana doc date ko green nahi karta
+    dates.add(s.date);
+  });
   Object.keys(sessions).forEach(function (k) {
     const s = sessions[k];
     if (s && s.date && Object.keys(s.marks).length) dates.add(s.date);
@@ -200,10 +207,15 @@ function buildSessions() {
     if (!m[2]) { legacy.push(id); return; }
     sessions[sessionKey(m[1], m[2])] = makeSession(id, m[1], m[2]);
   });
-  // purane docs (bina mode): Offline maano, agar us date ka naya offline doc nahi hai
+  // purane docs (bina mode): Offline draft maano jab us date ka koi Offline doc nahi hai.
+  // Agar hai, to wo purana doc ab gayab nahi hota: apna alag saved session ban kar Events me aata hai
+  // (dekh / edit / delete ho sakta hai, aur Stats me alag gina jata hai). Offline draft ek hi rehta hai.
   legacy.forEach(function (id) {
     const k = sessionKey(id, "offline");
-    if (!sessions[k]) sessions[k] = makeSession(id, id, "offline");
+    if (!sessions[k]) { sessions[k] = makeSession(id, id, "offline"); return; }
+    const ls = makeSession(id, id, "offline");
+    ls.legacy = true;
+    eventDocs.push(ls);
   });
   syncMainGreenDates();
 }
@@ -1039,7 +1051,7 @@ function renderEventsPanel() {
     main.className = "at-ev-main";
     const title = document.createElement("span");
     title.className = "at-ev-title";
-    title.textContent = s.title;
+    title.textContent = s.title || "Attendance";
     const tag = document.createElement("span");
     tag.className = "at-ev-tag " + (s.mode === "online" ? "tag-on" : "tag-off");
     tag.textContent = sessionTag(s);
@@ -1094,7 +1106,7 @@ atSearch.addEventListener("input", function () {
       const item = document.createElement("div");
       item.className = "at-sg";
       const label = document.createElement("span");
-      label.textContent = s.title + " (" + modeLabel(s.mode) + ")";
+      label.textContent = (s.title || "Attendance") + " (" + modeLabel(s.mode) + ")";
       const date = document.createElement("span");
       date.className = "at-sg-date";
       date.textContent = isoToDisplay(s.date);

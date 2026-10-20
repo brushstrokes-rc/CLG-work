@@ -290,176 +290,154 @@ loginForm.addEventListener("submit", async function (e) {
   }
 });
 
-// ---------- Date picker ----------
+// ---------- Date picker (calendar grid) ----------
 
-// Set initial button text + hidden input value to today's date
+const MONTHS_CAL = ["January","February","March","April","May","June",
+                    "July","August","September","October","November","December"];
+const DAYS_CAL   = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+
+let calYear  = selectedDate.getFullYear();
+let calMonth = selectedDate.getMonth();
+let calOpen  = false;
+
+// Set initial button text
 dateInput.value = toISO(selectedDate);
 dateBtn.textContent = toDisplay(selectedDate);
 
-// Clicking the visible button opens the native calendar on the hidden input
+// Build calendar DOM once, inject after dateBtn's row, hidden by default
+const calWrap = document.createElement("div");
+calWrap.id = "bsCalWrap";
+calWrap.style.cssText = [
+  "display:none;background:#fff8f2;border:1.5px solid #d9c9b8",
+  "border-radius:14px;padding:12px 10px 10px;margin-top:6px",
+  "max-width:320px;width:100%;box-shadow:0 2px 10px rgba(0,0,0,.10)",
+  "font-family:Segoe UI,Arial,sans-serif;box-sizing:border-box"
+].join(";");
+calWrap.innerHTML = [
+  '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">',
+    '<button id="bsCalPrev" type="button" style="background:none;border:none;font-size:22px;',
+      'cursor:pointer;color:#6b1020;padding:0 6px;line-height:1;">&#8249;</button>',
+    '<span id="bsCalLabel" style="font-weight:700;font-size:14px;color:#6b1020;"></span>',
+    '<button id="bsCalNext" type="button" style="background:none;border:none;font-size:22px;',
+      'cursor:pointer;color:#6b1020;padding:0 6px;line-height:1;">&#8250;</button>',
+  '</div>',
+  '<div id="bsCalGrid" style="display:grid;grid-template-columns:repeat(7,1fr);',
+    'gap:3px;text-align:center;"></div>'
+].join("");
+
+// Insert after the dateBtn's closest parent row
+const dateRow = dateBtn.closest(".date-row") || dateBtn.parentElement;
+dateRow.insertAdjacentElement("afterend", calWrap);
+
+function datesWithData() {
+  const set = new Set();
+  Object.values(sessions).forEach(function (s) { if (s && s.date) set.add(s.date); });
+  eventDocs.forEach(function (s) { if (s && s.date) set.add(s.date); });
+  return set;
+}
+
+function bsRenderCalendarGrid() {
+  const label = document.getElementById("bsCalLabel");
+  const grid  = document.getElementById("bsCalGrid");
+  if (!label || !grid) return;
+  label.textContent = MONTHS_CAL[calMonth] + " " + calYear;
+
+  const today   = new Date();
+  const dataSet = datesWithData();
+  const selISO  = toISO(selectedDate);
+
+  let html = DAYS_CAL.map(function (d) {
+    return '<div style="font-size:11px;font-weight:600;color:#8a7060;padding:2px 0;">' + d + '</div>';
+  }).join("");
+
+  const firstDay    = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+
+  for (var i = 0; i < firstDay; i++) html += '<div></div>';
+
+  for (var d = 1; d <= daysInMonth; d++) {
+    var iso     = calYear + "-" + pad(calMonth + 1) + "-" + pad(d);
+    var isToday = (d === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear());
+    var isSel   = (iso === selISO);
+    var hasData = dataSet.has(iso);
+
+    var bg = "transparent", color = "#3a2a1a", border = "none", fw = "500";
+    if (isSel && hasData) {
+      bg = "#2e7d32"; color = "#fff"; fw = "700";        // green filled — selected + data
+    } else if (isSel) {
+      bg = "#6b1020"; color = "#fff"; fw = "700";        // maroon filled — selected, no data
+    } else if (hasData) {
+      bg = "#2e7d32"; color = "#fff"; fw = "600";        // green filled — has data
+    } else if (isToday) {
+      border = "2px solid #6b1020"; color = "#6b1020"; fw = "700";  // today outline
+    }
+
+    html += '<div style="display:flex;justify-content:center;">' +
+      '<div style="font-size:13px;cursor:pointer;border-radius:50%;width:28px;height:28px;' +
+        'display:inline-flex;align-items:center;justify-content:center;' +
+        'background:' + bg + ';color:' + color + ';border:' + border + ';' +
+        'font-weight:' + fw + ';box-sizing:border-box;" data-iso="' + iso + '">' +
+        d +
+      '</div></div>';
+  }
+
+  grid.innerHTML = html;
+
+  grid.querySelectorAll("[data-iso]").forEach(function (el) {
+    el.addEventListener("click", function () {
+      if (editing) return;
+      var iso = this.getAttribute("data-iso");
+      var parts = iso.split("-");
+      selectedDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      dateInput.value = iso;
+      dateBtn.textContent = toDisplay(selectedDate);
+      syncTitleInput(true);
+      setNote(HINT);
+      refreshTableForDate();
+      bsRenderCalendarGrid();   // refresh selection highlight
+    });
+  });
+}
+
+// Toggle calendar on button click
 dateBtn.addEventListener("click", function () {
-  if (editing) return;   // edit ke dauran date locked
-  if (typeof dateInput.showPicker === "function") {
-    dateInput.showPicker();
-  } else {
-    dateInput.focus();
-    dateInput.click();
+  if (editing) return;
+  calOpen = !calOpen;
+  calWrap.style.display = calOpen ? "block" : "none";
+  if (calOpen) {
+    calYear  = selectedDate.getFullYear();
+    calMonth = selectedDate.getMonth();
+    bsRenderCalendarGrid();
   }
 });
 
-// When a date is picked from the calendar, switch the table to that date
+// Prev / Next month
+document.getElementById("bsCalPrev").addEventListener("click", function () {
+  if (--calMonth < 0) { calMonth = 11; calYear--; }
+  bsRenderCalendarGrid();
+});
+document.getElementById("bsCalNext").addEventListener("click", function () {
+  if (++calMonth > 11) { calMonth = 0; calYear++; }
+  bsRenderCalendarGrid();
+});
+
+// Expose for refresh from anywhere (Firestore update, tick, save, delete)
+window.bsRenderCalendar = function () {
+  if (calOpen) bsRenderCalendarGrid();
+};
+
+// dateInput change is now only a fallback (hidden input, not used by click)
 dateInput.addEventListener("change", function () {
   if (editing) { dateInput.value = toISO(selectedDate); return; }
   if (!dateInput.value) return;
-
-  const parts = dateInput.value.split("-"); // [yyyy, mm, dd]
+  const parts = dateInput.value.split("-");
   selectedDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-
   dateBtn.textContent = toDisplay(selectedDate);
   syncTitleInput(true);
   setNote(HINT);
   refreshTableForDate();
-  bsRenderCalendar();   // calendar refresh on date change
+  if (calOpen) bsRenderCalendarGrid();
 });
-
-// ---------- Mini Calendar Grid ----------
-(function () {
-  const MONTHS = ["January","February","March","April","May","June",
-                  "July","August","September","October","November","December"];
-  const DAYS   = ["Su","Mo","Tu","We","Th","Fr","Sa"];
-
-  let calYear  = selectedDate.getFullYear();
-  let calMonth = selectedDate.getMonth();
-
-  // Inject calendar HTML right after dateBtn's parent element
-  const dateRow = dateBtn.closest(".date-row") || dateBtn.parentElement;
-  const calWrap = document.createElement("div");
-  calWrap.id = "bsCalWrap";
-  calWrap.style.cssText = [
-    "background:#fff8f2;border:1.5px solid #d9c9b8;border-radius:14px",
-    "padding:12px 10px 10px;margin:10px 0 4px;max-width:320px;width:100%",
-    "box-shadow:0 2px 8px rgba(0,0,0,.07);font-family:Segoe UI,Arial,sans-serif"
-  ].join(";");
-
-  calWrap.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-      <button id="bsCalPrev" type="button"
-        style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b1020;padding:0 6px;line-height:1;">&#8249;</button>
-      <span id="bsCalLabel"
-        style="font-weight:700;font-size:14px;color:#6b1020;letter-spacing:.3px;"></span>
-      <button id="bsCalNext" type="button"
-        style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b1020;padding:0 6px;line-height:1;">&#8250;</button>
-    </div>
-    <div id="bsCalGrid"
-      style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;"></div>`;
-
-  dateRow.insertAdjacentElement("afterend", calWrap);
-
-  function datesWithData() {
-    const set = new Set();
-    // drafts (sessions object)
-    Object.values(sessions).forEach(function (s) { if (s && s.date) set.add(s.date); });
-    // saved events
-    eventDocs.forEach(function (s) { if (s && s.date) set.add(s.date); });
-    return set;
-  }
-
-  function render() {
-    const label = document.getElementById("bsCalLabel");
-    const grid  = document.getElementById("bsCalGrid");
-    if (!label || !grid) return;
-
-    label.textContent = MONTHS[calMonth] + " " + calYear;
-    const today    = new Date();
-    const dataSet  = datesWithData();
-    const selISO   = toISO(selectedDate);
-
-    let html = DAYS.map(function (d) {
-      return '<div style="font-size:11px;font-weight:600;color:#8a7060;padding:2px 0;">' + d + '</div>';
-    }).join("");
-
-    const firstDay    = new Date(calYear, calMonth, 1).getDay();
-    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-
-    for (var i = 0; i < firstDay; i++) html += '<div></div>';
-
-    for (var d = 1; d <= daysInMonth; d++) {
-      const iso     = calYear + "-" + pad(calMonth + 1) + "-" + pad(d);
-      const isToday = (d === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear());
-      const isSel   = iso === selISO;
-      const hasData = dataSet.has(iso);
-
-      // Base cell style
-      let style = [
-        "font-size:13px;cursor:pointer;border-radius:50%;width:28px;height:28px",
-        "display:inline-flex;align-items:center;justify-content:center",
-        "margin:1px auto;box-sizing:border-box;font-weight:500;position:relative"
-      ].join(";");
-
-      if (isSel) {
-        style += ";background:#6b1020;color:#fff;font-weight:700;";
-      } else if (isToday) {
-        style += ";border:2px solid #6b1020;color:#6b1020;font-weight:700;";
-      } else {
-        style += ";color:#3a2a1a;";
-      }
-
-      // Green fill for dates with data (if not selected)
-      const greenDot = hasData && !isSel
-        ? '<span style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);' +
-          'width:5px;height:5px;border-radius:50%;background:#2e7d32;display:block;"></span>'
-        : "";
-
-      // If has data and selected, show green background instead of maroon
-      if (hasData && isSel) {
-        style = style.replace("background:#6b1020", "background:#2e7d32");
-      }
-
-      html += '<div style="display:flex;justify-content:center;">' +
-        '<div style="' + style + '" data-iso="' + iso + '">' +
-          d + greenDot +
-        '</div></div>';
-    }
-
-    grid.innerHTML = html;
-
-    // Click handlers for each day cell
-    grid.querySelectorAll("[data-iso]").forEach(function (el) {
-      el.addEventListener("click", function () {
-        if (editing) return;
-        const iso = this.getAttribute("data-iso");
-        const parts = iso.split("-");
-        selectedDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-        dateInput.value = iso;
-        dateBtn.textContent = toDisplay(selectedDate);
-        syncTitleInput(true);
-        setNote(HINT);
-        refreshTableForDate();
-        bsRenderCalendar();
-      });
-    });
-  }
-
-  document.getElementById("bsCalPrev").addEventListener("click", function () {
-    if (--calMonth < 0) { calMonth = 11; calYear--; }
-    render();
-  });
-  document.getElementById("bsCalNext").addEventListener("click", function () {
-    if (++calMonth > 11) { calMonth = 0; calYear++; }
-    render();
-  });
-
-  // Expose so renderAll / buildSessions can refresh it
-  window.bsRenderCalendar = function () {
-    // Sync calendar month to selectedDate when date changes
-    calYear  = selectedDate.getFullYear();
-    calMonth = selectedDate.getMonth();
-    render();
-  };
-
-  // Initial render
-  render();
-})();
 
 // ---------- Attendance dashboard ----------
 

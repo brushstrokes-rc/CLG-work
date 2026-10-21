@@ -1,6 +1,6 @@
 // ── core-members-view.js ──
 import { getApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, onSnapshot }
+import { getFirestore, doc, setDoc, getDoc, deleteDoc, deleteField, collection, onSnapshot }
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
 const db = getFirestore(getApp());
@@ -312,7 +312,17 @@ function cmStartSessionsListener() {
   if (cmSessionsUnsub) return;
   cmSessionsUnsub = onSnapshot(collection(db, "core-attendance"), function (snap) {
     const list = [], days = new Set(), ids = new Set();
+    const drafts = {};   // "yyyy-mm-dd|mode" -> { state, dateKey, mode, t }  (Firestore ke draft docs)
     snap.forEach(docSnap => {
+      // Draft docs ("yyyy-mm-dd_mode_draft") sessions list me nahi aate; unhe alag cache me rakhte hain
+      const dm = docSnap.id.match(CM_DRAFT_RE);
+      if (dm) {
+        const d = docSnap.data() || {};
+        if (d.state && typeof d.state === "object") {
+          drafts[dm[1] + "|" + dm[2]] = { state: d.state, dateKey: dm[1], mode: dm[2], t: d.t || 0 };
+        }
+        return;
+      }
       const sv = cmMakeSaved(docSnap.id, docSnap.data());
       if (!sv) return;
       list.push(sv); days.add(sv.dateKey); ids.add(sv.id);
@@ -320,14 +330,21 @@ function cmStartSessionsListener() {
     cmAllSessions = list;
     cmSortSessions();
     cmSavedDays = days;
+    cmDraftCache = drafts;
+    if (!cmDraftsReady) { cmDraftsReady = true; cmMigrateLocalDrafts(); }   // pehla snapshot aate hi ticks allow
     // rang session ke doc id par: purane se naye ke order me baante jaate hain; hataye gaye ka rang free, baaki ke nahi badalte
     Object.keys(cmColorBook).forEach(k => { if (!ids.has(k)) delete cmColorBook[k]; });
     cmAllSessions.slice().reverse().forEach(x => cmColorFor(x.id));
     if (cmActiveId && !ids.has(cmActiveId)) cmActiveId = null;
     cmSyncGreen();          // calendar (Core + Attendance) khud redraw hoga
+    cmReapplyDraftFromRemote();   // doosre device ne ticks badle hon to yahan bhi dikhao
     const sb = document.getElementById("cmSessionSearch");
     cmRenderSessionList(sb ? sb.value : "");
-  }, function (e) { console.error("CM sessions listener:", e); cmSessionsUnsub = null; });
+  }, function (e) {
+    console.error("CM sessions listener:", e);
+    cmSessionsUnsub = null;
+    cmDraftsReady = true;   // error me bhi page freeze na ho (write fail hone par console me dikhega)
+  });
 }
 
 // core-attendance doc -> session. id "yyyy-mm-dd" (purana, date ke naam ka) ya "yyyy-mm-dd_mode_cm_xxxx" (naya).
@@ -366,7 +383,6 @@ window.addEventListener("bs:enter", function () { cmSyncGreen(); cmStartSessions
 // Registry badalte hi (Attendance ya Core Members) is page ka calendar redraw
 window.addEventListener("bs:attdates", function () { cmBuildCalendar(); });
 // doosre tab me draft badle to is tab ka green bhi sahi rahe
-window.addEventListener("storage", function (e) { if (e.key === CM_DRAFT_KEY) cmSyncGreen(); });
 
 // Date chunne par main screen us date + mode ka (ek) draft dikhati hai. Saved sessions yahan nahi khulte --
 // wo Sessions panel se khulte hain (View / Edit), taaki koi saved session galti se na badal jaye.
@@ -490,14 +506,14 @@ function cmRenderMembers(filter) {
 }
 
 function cmTick(name, type) {
-  if (cmLoading) return;
+  if (cmLoading || !cmDraftsReady) return;
   cmState[name] = cmState[name] === type ? null : type;
   cmDraftSave(cmDraftDate());
   cmRenderMembers(document.getElementById("cmSearchBar").value);
 }
 
 function cmClearAll() {
-  if (cmLoading) return;
+  if (cmLoading || !cmDraftsReady) return;
   if (!confirm("Clear all attendance marks?")) return;
   CM_MEMBERS.forEach(m => cmState[m.name] = null);
   cmDraftSave(cmDraftDate());
@@ -640,66 +656,119 @@ async function cmDeleteSession(s) {
   cmRenderSessionList(document.getElementById("cmSessionSearch").value);
 }
 
-// ── PER-DATE TICK DRAFTS ──────────────────────────────────────────────────────
-function cmReadRaw() {
-  try {
-    const raw = localStorage.getItem(CM_DRAFT_KEY);
-    const o = raw ? JSON.parse(raw) : {};
-    return (o && typeof o === "object" && !Array.isArray(o)) ? o : {};
-  } catch (e) { return {}; }
-}
-function cmWriteRaw(raw) {
-  try { localStorage.setItem(CM_DRAFT_KEY, JSON.stringify(raw)); }
-  catch (e) { console.warn("CM drafts save failed:", e); }
-  window.dispatchEvent(new Event("bs:core-drafts"));   // student-profile.js stats turant dobara ginti kare
-  cmSyncGreen();
-}
-// date + mode ke "current" draft slots (purane date-only draft bhi yahin ek slot ban kar aate hain)
+// ── PER-DATE TICK DRAFTS (Firestore: core-attendance/{date}_{mode}_draft) ─────────────────
+// Ab drafts browser me nahi, Firestore me hain -- Main attendance ke drafts ki tarah har device par same.
+// Har date + mode ka sirf EK draft doc. Same "core-attendance" collection hai, isliye Firestore rules me kuch nahi badalna.
+// Saved sessions ke ids ("..._cm_xxxx") se ye alag hain, isliye sessions list / stats / edit par koi asar nahi.
+const CM_DRAFT_RE = /^(\d{4}-\d{2}-\d{2})_(online|offline)_draft$/;
+let cmDraftCache = {};      // "yyyy-mm-dd|mode" -> { state, dateKey, mode, t }  (live snapshot ki copy)
+let cmDraftsReady = false;  // pehla snapshot aane tak ticks ruke rehte hain (warna doosre device ka draft overwrite ho sakta tha)
+let cmMigrationDone = false;
+
+function cmDraftDocId(dk, mode) { return dk + "_" + mode + "_draft"; }
+function cmReadRaw() { return cmDraftCache; }
+// date + mode ke "current" draft slots
 function cmDraftSlots() { return window.bsNormalizeCoreDrafts(cmReadRaw()); }
 function cmDraftDate() { return cmSelectedDate || cmTodayKey(); }
 // Draft key includes mode so Online and Offline have separate slots
 function cmDraftKey(dk, mode) { return dk + "|" + (mode || cmMode); }
 
-// Purana date-only draft ("yyyy-mm-dd") agar isi date + mode ke slot ka hai to hata do -- slot ab naye key me hai
-// (ya khaali ho gaya), warna wo wapas dikh/ginta. Baaki sab keys ko haath nahi lagta.
-function cmDropLegacyFor(raw, dk, mode) {
-  const d = raw[dk];
-  if (!d || typeof d !== "object" || !d.state) return;
-  const m = (d.mode === "online" || d.mode === "offline") ? d.mode : "offline";
-  if (m === mode) delete raw[dk];
+function cmAfterDraftChange() {
+  window.dispatchEvent(new Event("bs:core-drafts"));   // student-profile.js stats ke liye
+  cmSyncGreen();
 }
 
-// Abhi ki ticks is date + mode ke EK slot me: har baar usi slot ko overwrite karta hai (history nahi),
-// aur saari ticks hat jayein to slot hat jata hai (session ginti se bahar). Edit mode me draft ko haath nahi lagta.
+// Abhi ki ticks is date + mode ke EK doc me. Sirf badle hue members likhte hain (Main attendance ki tarah merge),
+// isliye do device ek saath alag-alag member tick karein to dono bache rehte hain. Saari ticks hat jayein to doc hat jata hai.
+// Edit mode me draft ko haath nahi lagta.
 function cmDraftSave(dk) {
-  // Date load / edit ke dauran cmState kisi aur record ka ho sakta hai; use draft me likhne se phantom session banta tha.
-  if (cmLoading || cmEditing) return;
-  const raw = cmReadRaw();
-  const slot = cmDraftKey(dk, cmMode);
-  const state = {};
-  CM_MEMBERS.forEach(m => { state[m.name] = cmState[m.name] || null; });
-  const empty = CM_MEMBERS.every(m => !state[m.name]);
-  const beforeDrop = JSON.stringify(raw);
-  cmDropLegacyFor(raw, dk, cmMode);
-  const hadLegacy = JSON.stringify(raw) !== beforeDrop;   // purana date-only draft isi slot ka tha (ab hata diya)
-  if (empty) delete raw[slot];
-  else {
-    // Kuch badla hi nahi (jaise sirf Online/Offline switch hua): dobara likhne ki zaroorat nahi
-    const cur = raw[slot];
-    if (!hadLegacy && cur && cur.state && JSON.stringify(cur.state) === JSON.stringify(state)) return;
-    raw[slot] = { state, dateKey: dk, mode: cmMode, t: Date.now() };
+  if (cmLoading || cmEditing || !cmDraftsReady) return;
+  const mode = cmMode, slot = cmDraftKey(dk, mode);
+  const ref = doc(db, "core-attendance", cmDraftDocId(dk, mode));
+  const prev = cmDraftSlots()[slot];
+  const prevState = (prev && prev.state) || {};
+
+  const next = {}, patch = {};
+  let changed = false;
+  CM_MEMBERS.forEach(function (m) {
+    const nv = cmState[m.name] || null;
+    if (nv) next[m.name] = nv;
+    const legacy = cmLegacyNames(m.name);   // purani spelling ki key ho to wo bhi saaf ho jaye
+    const old = prevState[m.name] || legacy.map(function (k) { return prevState[k]; }).find(Boolean) || null;
+    const hasLegacyKey = legacy.some(function (k) { return k in prevState; });
+    if (old !== nv || hasLegacyKey) {
+      patch[m.name] = nv ? nv : deleteField();
+      legacy.forEach(function (k) { if (k in prevState) patch[k] = deleteField(); });
+      changed = true;
+    }
+  });
+  if (!changed) return;   // kuch badla hi nahi (jaise sirf Online/Offline switch hua)
+
+  const now = Date.now();
+  if (!Object.keys(next).length) {
+    delete cmDraftCache[slot];
+    deleteDoc(ref).catch(function (e) { console.error("CM draft delete failed:", e); });
+  } else {
+    cmDraftCache[slot] = { state: next, dateKey: dk, mode: mode, t: now };
+    setDoc(ref, { state: patch, dateKey: dk, mode: mode, t: now }, { merge: true })
+      .catch(function (e) { console.error("CM draft save failed:", e); });
   }
-  cmWriteRaw(raw);
+  cmAfterDraftChange();
 }
-// Sirf is date + mode ka slot hatao (Save ke baad). Doosre mode ka draft aur baaki sab jaisa tha waisa.
+
+// Sirf is date + mode ka draft hatao (Save ke baad). Doosre mode ka draft aur baaki sab jaisa tha waisa.
 function cmDraftDeleteSlot(dk, mode) {
-  const raw = cmReadRaw();
-  const before = JSON.stringify(raw);
-  delete raw[cmDraftKey(dk, mode)];
-  cmDropLegacyFor(raw, dk, mode);
-  if (JSON.stringify(raw) !== before) cmWriteRaw(raw);
-  else cmSyncGreen();
+  const slot = cmDraftKey(dk, mode);
+  if (!cmDraftCache[slot]) { cmSyncGreen(); return; }
+  delete cmDraftCache[slot];
+  deleteDoc(doc(db, "core-attendance", cmDraftDocId(dk, mode)))
+    .catch(function (e) { console.error("CM draft delete failed:", e); });
+  cmAfterDraftChange();
 }
+
+// Doosre device / tab ne draft badla ho to is screen ki ticks bhi update karo.
+// (cmState hamesha cache ke barabar rehta hai, isliye farak tabhi aata hai jab badlaav bahar se aaya ho.)
+function cmReapplyDraftFromRemote() {
+  if (cmEditing || cmLoading || !document.getElementById("cmMemberList")) return;
+  const dk = cmDraftDate();
+  const d = cmDraftSlots()[cmDraftKey(dk, cmMode)];
+  const same = CM_MEMBERS.every(function (m) {
+    const v = d && d.state ? (d.state[m.name] || cmLegacyNames(m.name).map(function (k) { return d.state[k]; }).find(Boolean) || null) : null;
+    const want = (v === "present" || v === "half") ? v : null;
+    return (cmState[m.name] || null) === want;
+  });
+  if (same) return;
+  cmApplyDraft(dk);
+  const sb = document.getElementById("cmSearchBar");
+  cmRenderMembers(sb ? sb.value : "");
+}
+
+// Ek baar ka migration: is device ke purane localStorage drafts Firestore me chale jayen (jo slot Firestore me
+// pehle se hai use nahi chhedte). Copy "bs-core-ticks-v1-backup" me bachi rehti hai.
+function cmMigrateLocalDrafts() {
+  if (cmMigrationDone) return;
+  cmMigrationDone = true;
+  let rawStr = null, raw = null;
+  try { rawStr = localStorage.getItem(CM_DRAFT_KEY); raw = rawStr ? JSON.parse(rawStr) : null; } catch (e) { return; }
+  if (!raw || typeof raw !== "object") return;
+  const slots = window.bsNormalizeCoreDrafts(raw);
+  const writes = [];
+  Object.keys(slots).forEach(function (k) {
+    const s = slots[k];
+    if (!cmDraftHasTicks(s) || cmDraftCache[k]) return;
+    const state = {};
+    Object.keys(s.state).forEach(function (n) {
+      if (s.state[n] === "present" || s.state[n] === "half") state[n] = s.state[n];
+    });
+    cmDraftCache[k] = { state: state, dateKey: s.dateKey, mode: s.mode, t: s.t || Date.now() };
+    writes.push(setDoc(doc(db, "core-attendance", cmDraftDocId(s.dateKey, s.mode)),
+      { state: state, dateKey: s.dateKey, mode: s.mode, t: s.t || Date.now() }));
+  });
+  Promise.all(writes).then(function () {
+    try { localStorage.setItem(CM_DRAFT_KEY + "-backup", rawStr); localStorage.removeItem(CM_DRAFT_KEY); } catch (e) {}
+  }).catch(function (e) { console.error("CM draft migration failed:", e); });
+}
+
 // Is date+mode ke slot ke ticks main screen ke state me daalo. true = draft mila
 function cmApplyDraft(dk) {
   const d = cmDraftSlots()[cmDraftKey(dk, cmMode)];
@@ -755,6 +824,7 @@ function cmExitEdit() {
   cmBuildCalendar();
   cmRenderMembers(document.getElementById("cmSearchBar").value);
   cmRenderSessionList(document.getElementById("cmSessionSearch").value);
+  cmReapplyDraftFromRemote();   // edit ke dauran doosre device se draft badla ho to taaza dikhao
 }
 // Is exact saved session ko edit karo (working copy main screen par; drafts ko haath nahi lagta)
 function cmEnterEdit(sv) {

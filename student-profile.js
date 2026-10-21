@@ -15,6 +15,7 @@ import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/fi
 // Core Members session patterns
 const RE_CM_EVENT  = /^(\d{4}-\d{2}-\d{2})_(offline|online)_cm_[a-z0-9]+$/;
 const RE_CM_LEGACY = /^(\d{4}-\d{2}-\d{2})$/;
+const RE_CM_DRAFT  = /^(\d{4}-\d{2}-\d{2})_(online|offline)_draft$/;   // Core draft doc (core-attendance/{date}_{mode}_draft)
 
 // Same name everywhere: old spellings stored in earlier records count as the correct name (records are not changed).
 const NAME_ALIASES = { "Shahnaz": "Shahnaz Ahmad", "Shaksham Katiyar": "Saksham Katiyar", "Manya": "Manya Singla", "Manya singla": "Manya Singla" };
@@ -216,25 +217,24 @@ function buildCoreSessions(docs) {
                createdAt: d.savedAt ? new Date(d.savedAt).getTime() : 0 });
   });
 
-  // 3. Draft sessions from localStorage (key "bs-core-ticks-v1"): har date + mode ka sirf ek slot,
-  //    aur wo tabhi session hai jab usme kam se kam ek Present/Half mark ho. Saved session hone se draft ruk nahi jata.
-  try {
-    const raw = localStorage.getItem("bs-core-ticks-v1");
-    const slots = window.bsNormalizeCoreDrafts(raw ? JSON.parse(raw) : {});
-    Object.keys(slots).forEach(function (slotKey) {
-      const slot = slots[slotKey];
-      const marks = Object.create(null);
-      let n = 0;
-      Object.keys(slot.state).forEach(function (name) {
-        const st = normStatus(slot.state[name]);
-        if (st) { marks[canonName(name)] = st; n++; }
-      });
-      if (n === 0 && !COUNT_EMPTY_SESSIONS) return;
-      all.push({ id: "draft-" + slotKey, date: slot.dateKey, mode: slot.mode, origin: "core",
-                 title: "", marks: marks, markCount: n,
-                 createdAt: slot.t || 0 });
+  // 3. Draft sessions (Firestore: core-attendance/{date}_{mode}_draft): har date + mode ka sirf ek draft,
+  //    aur wo tabhi session hai jab usme kam se kam ek Present/Half mark ho. Ab ye sab devices par same dikhte hain.
+  Object.keys(docs).forEach(function (id) {
+    const m = id.match(RE_CM_DRAFT);
+    if (!m) return;
+    const d = docs[id] || {};
+    const state = (d.state && typeof d.state === "object") ? d.state : {};
+    const marks = Object.create(null);
+    let n = 0;
+    Object.keys(state).forEach(function (name) {
+      const st = normStatus(state[name]);
+      if (st) { marks[canonName(name)] = st; n++; }
     });
-  } catch (e) { /* localStorage unavailable */ }
+    if (n === 0 && !COUNT_EMPTY_SESSIONS) return;
+    all.push({ id: "draft-" + m[1] + "|" + m[2], date: m[1], mode: m[2], origin: "core",
+               title: "", marks: marks, markCount: n,
+               createdAt: d.t || 0 });
+  });
 
   // Sort newest first, deduplicate only by id (same Firestore doc read twice)
   all.sort(function (a, b) {

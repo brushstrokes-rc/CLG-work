@@ -107,7 +107,9 @@ const students = [
   "Nayab",
   "Asrah Ansari",
   "Raj Kuldeep",
-  "Ayushman Singh"
+  "Ayushman Singh",
+  "Subrat Dash",
+  "Meenal"
 ];
 
 // Profile page ke liye (sirf padhne wali copy): course list aur Main attendance ke naam

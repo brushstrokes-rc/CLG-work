@@ -27,6 +27,10 @@
     ]
   };
 
+  // Extra: lights = navbar ke neeche string lights (alag jagah leti hain, kuch dhakti nahi),
+  //        fireworks = aasman me patakhe (peeche ki layer me).
+  var EXTRAS = { diwali: { lights: true, fireworks: true } };
+
   var name = String(SEASON || "").toLowerCase();
   if (!name || !THEMES[name]) return;     // khali ya galat naam = kuch nahi hota, website waisi hi rehti hai
 
@@ -35,6 +39,99 @@
 
     function rnd(a, b) { return a + Math.random() * (b - a); }
     function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
+
+    // ---------- navbar ke just neeche string lights (non-sticky) ----------
+    function addLights() {
+      if (document.querySelector(".bs-lights")) return;
+      var nav = document.querySelector(".app-nav");
+      if (!nav || !nav.parentNode) return;
+      var d = document.createElement("div");
+      d.className = "bs-lights";
+      d.setAttribute("aria-hidden", "true");
+      nav.parentNode.insertBefore(d, nav.nextSibling);
+    }
+
+    // ---------- fireworks: canvas, sabse peeche, click nahi rokta ----------
+    function startFireworks(layer) {
+      if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      var cv = document.createElement("canvas");
+      cv.className = "bs-fw";
+      layer.appendChild(cv);
+      var ctx = cv.getContext && cv.getContext("2d");
+      if (!ctx) return;
+
+      var W = 0, H = 0;
+      function size() {
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        W = layer.clientWidth || window.innerWidth || 360;
+        H = layer.clientHeight || window.innerHeight || 640;
+        cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      size();
+      window.addEventListener("resize", size);
+
+      var small = W <= 600;
+      var perBurst = small ? 30 : 46, maxSparks = perBurst * (small ? 2 : 3);
+      var PALETTES = [["#ffb300", "#ff6a00"], ["#e0112b", "#ff8a00"], ["#d4145a", "#ffb300"], ["#ff9800", "#ffd34d"], ["#c2185b", "#ff7043"], ["#16a34a", "#ffc107"]];
+      var rockets = [], sparks = [], nextLaunch = 0, last = 0, raf = 0;
+
+      function launch(now) {
+        var x0 = rnd(0.12, 0.88) * W;
+        rockets.push({ x0: x0, x1: x0 + rnd(-0.06, 0.06) * W, y1: rnd(0.1, 0.45) * H, t: 0, dur: rnd(50, 80),
+                       px: x0, py: H, pal: PALETTES[Math.floor(Math.random() * PALETTES.length)] });
+        nextLaunch = now + rnd(900, 2200);
+      }
+      function explode(x, y, pal) {
+        var n = perBurst, power = rnd(2.2, 3.6) * (small ? 0.8 : 1);
+        for (var i = 0; i < n; i++) {
+          var a = (i / n) * Math.PI * 2 + rnd(-0.08, 0.08), sp = power * rnd(0.55, 1.05);
+          sparks.push({ x: x, y: y, px: x, py: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+                        life: 1, decay: rnd(0.011, 0.018), c: pal[i % 2], w: rnd(1.4, 2.4) });
+        }
+      }
+
+      function frame(t) {
+        raf = window.requestAnimationFrame(frame);
+        var dt = Math.min(3, (t - last) / 16.67) || 1; last = t;
+        if (t >= nextLaunch && rockets.length < 2 && sparks.length < maxSparks - perBurst) launch(t);
+
+        // pichla frame dheere dheere mitao (transparent canvas par, isliye light/dark dono me chalta hai)
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.fillStyle = "rgba(0,0,0," + Math.min(0.5, 0.26 * dt) + ")";
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.lineCap = "round";
+
+        for (var i = rockets.length - 1; i >= 0; i--) {
+          var r = rockets[i];
+          r.t += dt;
+          var p = Math.min(1, r.t / r.dur), e = 1 - Math.pow(1 - p, 3);
+          var x = r.x0 + (r.x1 - r.x0) * e, y = H + (r.y1 - H) * e;
+          ctx.strokeStyle = "#ffcf4a"; ctx.lineWidth = 2.2; ctx.globalAlpha = 0.9;
+          ctx.beginPath(); ctx.moveTo(r.px, r.py); ctx.lineTo(x, y); ctx.stroke();
+          r.px = x; r.py = y;
+          if (p >= 1) { explode(x, y, r.pal); rockets.splice(i, 1); }
+        }
+
+        for (var j = sparks.length - 1; j >= 0; j--) {
+          var s = sparks[j];
+          s.vy += 0.045 * dt; s.vx *= 0.992; s.vy *= 0.992;
+          s.px = s.x; s.py = s.y; s.x += s.vx * dt; s.y += s.vy * dt; s.life -= s.decay * dt;
+          if (s.life <= 0) { sparks.splice(j, 1); continue; }
+          ctx.globalAlpha = Math.max(0, s.life);
+          ctx.strokeStyle = s.c; ctx.lineWidth = s.w * (0.5 + s.life * 0.6);
+          ctx.beginPath(); ctx.moveTo(s.px, s.py); ctx.lineTo(s.x, s.y); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        // kuch bhi baaki nahi to canvas poora saaf (halke bache hue nishaan hatane ke liye)
+        if (!rockets.length && !sparks.length) ctx.clearRect(0, 0, W, H);
+      }
+      function start() { if (!raf) { last = (window.performance && window.performance.now) ? window.performance.now() : 0; nextLaunch = last + 500; raf = window.requestAnimationFrame(frame); } }
+      function stop() { if (raf) { window.cancelAnimationFrame(raf); raf = 0; } }
+      document.addEventListener("visibilitychange", function () { if (document.hidden) stop(); else start(); });
+      start();
+    }
 
     function build() {
       if (!document.body || document.querySelector(".bs-season-layer")) return;
@@ -89,6 +186,10 @@
       });
 
       document.body.appendChild(layer);
+
+      var extra = EXTRAS[name] || {};
+      if (extra.lights) addLights();
+      if (extra.fireworks) startFireworks(layer);
 
       // Footer ke upar rakhna: footer scroll karke aata hai to neeche ki decoration (zameen, kaddu, diye, glow)
       // uske saath upar uthti rehti hai, footer ke peeche chhupti nahi.

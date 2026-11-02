@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  var SEASON = "halloween";
+  var SEASON = "diwali";
 
   // Har theme ke particles. n = [desktop, phone]. kind: fly (udta), rise (neeche se upar), fall (upar se neeche),
   // bob (neeche jhoomta), twinkle (jagah par chamakta).

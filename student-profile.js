@@ -11,6 +11,7 @@
 import { getApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import { mountStudentActivities } from "./student-activities.js";   // activities added on the BS student website (live)
 
 // Core Members session patterns
 const RE_CM_EVENT  = /^(\d{4}-\d{2}-\d{2})_(offline|online)_cm_[a-z0-9]+$/;
@@ -264,6 +265,8 @@ let loadError     = false;
 let unsub         = null;
 let coreUnsub     = null;
 let coreDocs      = {};   // last core-attendance snapshot (drafts change without a snapshot, so we rebuild from this)
+let actView       = null; // live Activities box under the profile boxes (student-activities.js)
+let actName       = "";
 const cur = { name: "", status: "present", origin: "attendance" };
 
 function make(tag, cls, text) {
@@ -275,7 +278,7 @@ function make(tag, cls, text) {
 function visible(id) { const el = $(id); return !!el && !el.hidden; }
 
 // ---------- navigation ----------
-function hideMine() { MY_VIEWS.forEach(function (id) { const el = $(id); if (el) el.hidden = true; }); }
+function hideMine() { MY_VIEWS.forEach(function (id) { const el = $(id); if (el) el.hidden = true; }); destroyActivities(); }
 
 function showMine(id) {
   APP_VIEWS.forEach(function (v) { const el = $(v); if (el) el.hidden = true; });
@@ -288,7 +291,32 @@ function showMine(id) {
   document.querySelectorAll("#appNav a").forEach(function (a) {
     a.classList.toggle("active", a.dataset.view === activeView);
   });
+  syncActivities(id);
   window.scrollTo(0, 0);
+}
+
+// ---------- Activities (BS student website) — shown below the attendance boxes, live ----------
+// Student ne signup me jo naam diya, wahi naam (case / spaces ka farq nahi) match hota hai; canonName bhi try hota hai.
+function destroyActivities() {
+  if (actView) { actView.destroy(); actView = null; }
+  actName = "";
+  const old = $("spActivities");
+  if (old) old.remove();
+}
+function syncActivities(id) {
+  if (id !== "viewStudentProfile") { destroyActivities(); return; }
+  if (actView && actName === cur.name) return;          // same student, already live
+  destroyActivities();
+  const host = document.createElement("div");
+  host.id = "spActivities";
+  const anchor = $("spBoxes");
+  if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(host, anchor.nextSibling);
+  else $("viewStudentProfile").appendChild(host);
+  const names = [cur.name];
+  const canon = canonName(cur.name);
+  if (canon !== cur.name) names.push(canon);
+  actName = cur.name;
+  actView = mountStudentActivities(host, { names: names });
 }
 
 function leaveToOrigin() {

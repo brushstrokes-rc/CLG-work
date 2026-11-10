@@ -17,7 +17,20 @@ const app = initializeApp(firebaseConfig);
 // har reload / dobara open par login page aata hai. Kuch bhi Firestore ya Auth me delete nahi hota.
 const auth = initializeAuth(app, { persistence: inMemoryPersistence });
 const db = getFirestore(getApp());
+window.bsAdminDb = db;  // admin-dashboard.html uses this to read attendance docs
 const toEmail = u => `${u.trim().toLowerCase().replace(/\s+/g, "")}@brushstrokes.app`;
+
+// ── nameHash helper (exposed for admin-dashboard.html) ──────────────────────
+// Same SHA-256 logic as bs.js (student project) — must stay identical.
+window.bsComputeNameHash = async function(name) {
+  const norm = String(name || "").normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
+  const enc  = new TextEncoder().encode(norm);
+  const buf  = await crypto.subtle.digest("SHA-256", enc);
+  const hex  = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+  return hex.slice(0, 40);
+};
+// Expose admin Firestore db for admin-dashboard to read attendance docs
+window.bsAdminDb = null; // set after db is ready (below)
 // ---------- Account storage (one account per device) ----------
 
 

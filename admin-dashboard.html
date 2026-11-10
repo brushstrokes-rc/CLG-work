@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brushstrokes — Admin Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#fff9f4;--surface:#fff;--surface2:#fff3ea;--border:#e8d5c0;--text:#2a1a0e;--text2:#6b4c2a;--accent:#800020;--accent2:#a0303c;--green:#2e7d32;--green-bg:#e8f5e9;--red:#c62828;--red-bg:#ffebee;--amber:#e65100;--amber-bg:#fff3e0;--blue:#1565c0;--blue-bg:#e3f2fd;--shadow:0 2px 12px rgba(80,30,10,.10);--r:14px}
+    [data-theme=dark]{--bg:#1a0e08;--surface:#2a1a0e;--surface2:#3a2210;--border:#5a3a1a;--text:#f5e8d8;--text2:#c8a070;--green-bg:#1b3a1c;--red-bg:#3a1010;--amber-bg:#3a2000;--blue-bg:#0a1a3a}
+    body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+    /* Auth gate */
+    #authGate{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+    .auth-box{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:40px 32px;max-width:420px;width:100%;text-align:center;box-shadow:var(--shadow)}
+    .auth-box h1{font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--accent);margin-bottom:8px}
+    .auth-box p{color:var(--text2);font-size:.95rem;margin-bottom:24px}
+    .auth-box label{display:block;text-align:left;font-weight:700;font-size:.85rem;margin-bottom:4px}
+    .auth-box input{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:.95rem;font-family:inherit;background:var(--surface2);color:var(--text);margin-bottom:14px}
+    .auth-box input:focus{outline:none;border-color:var(--accent)}
+    #authMsg{margin-top:12px;font-size:.88rem;color:var(--red);min-height:20px}
+
+    /* App */
+    #appShell{display:none}
+    .dash-header{background:var(--accent);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,.2)}
+    .dash-header h1{font-family:'Playfair Display',serif;font-size:1.3rem}
+    .hdr-right{display:flex;align-items:center;gap:10px}
+    .btn-sm{padding:7px 16px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:none;font-family:inherit}
+    .btn-logout{background:rgba(255,255,255,.18);color:#fff}
+    .btn-logout:hover{background:rgba(255,255,255,.3)}
+
+    /* Sync status bar */
+    #syncBar{background:var(--blue-bg);color:var(--blue);padding:8px 24px;font-size:.82rem;font-weight:700;display:none;align-items:center;gap:8px}
+    #syncBar.show{display:flex}
+
+    .dash-main{max-width:1100px;margin:0 auto;padding:28px 20px 60px}
+
+    /* Tabs */
+    .tabs{display:flex;gap:6px;margin-bottom:24px;flex-wrap:wrap}
+    .tab-btn{padding:9px 20px;border-radius:10px 10px 0 0;border:1.5px solid var(--border);border-bottom:none;background:var(--surface2);color:var(--text2);font-weight:700;font-size:.88rem;cursor:pointer;font-family:inherit;transition:all .15s}
+    .tab-btn.active{background:var(--surface);color:var(--accent);border-color:var(--accent)}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+
+    /* Cards */
+    .card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:20px;box-shadow:var(--shadow);margin-bottom:16px}
+    .card-title{font-size:1.1rem;font-weight:800;color:var(--accent);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+    .badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:999px;background:var(--accent);color:#fff;font-size:.75rem;font-weight:800;padding:0 6px}
+
+    /* Student rows */
+    .s-row{display:flex;align-items:flex-start;gap:14px;padding:14px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+    .s-row:last-child{border-bottom:none}
+    .s-av{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#e8764f);color:#fff;font-weight:800;font-size:1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .s-info{flex:1;min-width:180px}
+    .s-name{font-weight:800;font-size:1rem;margin-bottom:3px}
+    .s-meta{font-size:.82rem;color:var(--text2);display:flex;flex-wrap:wrap;gap:6px;margin-top:3px}
+    .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.75rem;font-weight:700}
+    .pill-pending{background:var(--amber-bg);color:var(--amber)}
+    .pill-approved{background:var(--green-bg);color:var(--green)}
+    .pill-rejected{background:var(--red-bg);color:var(--red)}
+    .s-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+    .btn-approve{padding:7px 16px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:none;font-family:inherit;background:var(--green-bg);color:var(--green);transition:background .15s}
+    .btn-approve:hover{background:#c8e6c9}
+    .btn-approve:disabled{opacity:.5;cursor:not-allowed}
+    .btn-reject{padding:7px 16px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:none;font-family:inherit;background:var(--red-bg);color:var(--red)}
+    .btn-reject:hover{background:#ffcdd2}
+    .btn-sync{padding:7px 16px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;border:1.5px solid var(--border);font-family:inherit;background:var(--surface2);color:var(--text2)}
+    .btn-sync:disabled{opacity:.5;cursor:not-allowed}
+
+    .nm-row{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:.82rem;color:var(--text2)}
+    .nm-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--accent)}
+
+    .empty{text-align:center;padding:40px 20px;color:var(--text2);font-size:.95rem}
+    .empty-icon{font-size:2.5rem;margin-bottom:10px}
+    .loading{text-align:center;padding:24px;color:var(--text2);font-size:.9rem}
+
+    /* Primary button */
+    .btn-primary{display:inline-block;padding:11px 28px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-weight:700;font-size:.95rem;font-family:inherit;cursor:pointer;transition:background .2s}
+    .btn-primary:hover{background:var(--accent2)}
+    .btn-primary:disabled{opacity:.6;cursor:not-allowed}
+
+    /* Toast */
+    #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#222;color:#fff;padding:10px 24px;border-radius:999px;font-size:.9rem;font-weight:700;z-index:9999;transition:transform .3s;pointer-events:none}
+    #toast.show{transform:translateX(-50%) translateY(0)}
+
+    /* Sync all button */
+    .sync-all-wrap{margin-bottom:16px}
+
+    @media(max-width:600px){.hdr-right{flex-wrap:wrap}.s-actions{width:100%}}
+  </style>
+</head>
+<body>
+
+<!-- Auth Gate -->
+<div id="authGate">
+  <div class="auth-box">
+    <h1>🖌️ Admin Dashboard</h1>
+    <p>Brushstrokes — Student Manager</p>
+    <label>Admin Username</label>
+    <input id="lgUser" type="text" placeholder="Your admin username" autocomplete="username">
+    <label>Password</label>
+    <input id="lgPass" type="password" placeholder="Password" autocomplete="current-password">
+    <button class="btn-primary" id="lgBtn">Sign In</button>
+    <div id="authMsg"></div>
+  </div>
+</div>
+
+<!-- App Shell -->
+<div id="appShell">
+  <header class="dash-header">
+    <h1>🖌️ Brushstrokes Admin</h1>
+    <div class="hdr-right">
+      <span id="adminName" style="font-size:.85rem;opacity:.85"></span>
+      <button class="btn-sm btn-logout" id="logoutBtn">Sign Out</button>
+    </div>
+  </header>
+
+  <div id="syncBar">
+    <span id="syncBarMsg">🔄 Syncing attendance…</span>
+  </div>
+
+  <main class="dash-main">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="pending">Pending <span class="badge" id="pendingBadge">0</span></button>
+      <button class="tab-btn" data-tab="approved">Approved</button>
+      <button class="tab-btn" data-tab="rejected">Rejected</button>
+    </div>
+
+    <!-- PENDING -->
+    <div class="tab-panel active" id="tab-pending">
+      <div class="card">
+        <div class="card-title">⏳ Pending Approvals</div>
+        <div id="pendingList"><div class="loading">Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- APPROVED -->
+    <div class="tab-panel" id="tab-approved">
+      <div class="sync-all-wrap">
+        <button class="btn-primary" id="syncAllBtn">🔄 Sync All Attendance</button>
+        <span style="font-size:.8rem;color:var(--text2);margin-left:10px">Updates all approved students' attendance from admin records</span>
+      </div>
+      <div class="card">
+        <div class="card-title">✅ Approved Students</div>
+        <div id="approvedList"><div class="loading">Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- REJECTED -->
+    <div class="tab-panel" id="tab-rejected">
+      <div class="card">
+        <div class="card-title">❌ Rejected Accounts</div>
+        <div id="rejectedList"><div class="loading">Loading…</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
+import {
+  initializeAuth, inMemoryPersistence,
+  signInWithEmailAndPassword, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
+import {
+  getFirestore, collection, doc,
+  getDoc, getDocs, setDoc, updateDoc,
+  onSnapshot, query, orderBy, writeBatch,
+  serverTimestamp, deleteField, FieldValue
+} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+
+// ── Configs ──────────────────────────────────────────────────
+const ADMIN_CFG = {
+  apiKey:"AIzaSyDXdAA-gK43ZC6BlspWYrB9_Yk3nO0tLnY",
+  authDomain:"brushstrokes-cc86c.firebaseapp.com",
+  projectId:"brushstrokes-cc86c",
+  storageBucket:"brushstrokes-cc86c.firebasestorage.app",
+  messagingSenderId:"684392264786",
+  appId:"1:684392264786:web:155f9a259161c036995b8b"
+};
+const STUDENT_CFG = {
+  apiKey:"AIzaSyATW9btDBBsJg32Qcj84yEU34l1OzX5G_Q",
+  authDomain:"brushstrokes-student.firebaseapp.com",
+  projectId:"brushstrokes-student",
+  storageBucket:"brushstrokes-student.firebasestorage.app",
+  messagingSenderId:"140790604149",
+  appId:"1:140790604149:web:18dc0eaf59d9672ce8333c"
+};
+
+// Admin UID in ADMIN project (brushstrokes-cc86c)
+const ADMIN_UID_ADMIN_PROJECT   = "S5SAl58EhKMiH949NHYKVcwRapH3";
+// Admin UID in STUDENT project (brushstrokes-student)
+const ADMIN_UID_STUDENT_PROJECT = "25Tcm6EsmDSwrznOhNwZaLMV0zg1";
+const toEmail = u => `${u.trim().toLowerCase().replace(/\s+/g,"")}@brushstrokes.app`;
+
+// ── Init two Firebase apps ────────────────────────────────────
+const adminApp   = initializeApp(ADMIN_CFG,   "admin-dash");
+const studentApp = initializeApp(STUDENT_CFG, "student-dash");
+
+const adminAuth  = initializeAuth(adminApp,   {persistence: inMemoryPersistence});
+const adminDb    = getFirestore(adminApp);
+const studentDb  = getFirestore(studentApp);
+
+// ── Helpers ───────────────────────────────────────────────────
+const G = id => document.getElementById(id);
+let toastTimer;
+function say(msg, dur=2800) {
+  G("toast").textContent = msg;
+  G("toast").classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => G("toast").classList.remove("show"), dur);
+}
+function initials(name) {
+  return String(name||"?").split(/\s+/).filter(Boolean).map(w=>w[0]).join("").slice(0,2).toUpperCase();
+}
+function ts(ft) {
+  if (!ft) return "";
+  const d = ft.toDate ? ft.toDate() : new Date(ft);
+  return d.toLocaleDateString("en-IN",{dateStyle:"medium"});
+}
+function esc(s) {
+  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function syncBarShow(msg) { G("syncBar").classList.add("show"); G("syncBarMsg").textContent = msg; }
+function syncBarHide()    { G("syncBar").classList.remove("show"); }
+
+// ── nameHash (MUST match bs.js exactly) ───────────────────────
+async function computeNameHash(name) {
+  const norm = String(name||"").normalize("NFKC").trim().toLowerCase().replace(/\s+/g," ");
+  const enc  = new TextEncoder().encode(norm);
+  const buf  = await crypto.subtle.digest("SHA-256", enc);
+  const hex  = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+  return hex.slice(0,40);
+}
+
+// ── Parse admin attendance docId ──────────────────────────────
+function parseDocId(docId) {
+  const ev = docId.match(/^(\d{4}-\d{2}-\d{2})_(offline|online)_ev_[a-z0-9]+$/);
+  if (ev) return {date:ev[1], mode:ev[2], title:""};
+  const dr = docId.match(/^(\d{4}-\d{2}-\d{2})_(offline|online)$/);
+  if (dr) return {date:dr[1], mode:dr[2], title:""};
+  const lg = docId.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (lg) return {date:lg[1], mode:"offline", title:""};
+  return null;
+}
+function safeKey(s) { return String(s).replace(/[./]/g,"_"); }
+function monthKey(iso) { return String(iso||"").slice(0,7); }
+
+// ── NAME_ALIASES from brushstroke.js — keep in sync ──────────
+const NAME_ALIASES = {
+  "Shahnaz":"Shahnaz Ahmad",
+  "Shaksham Katiyar":"Saksham Katiyar",
+  "Manya":"Manya Singla",
+  "Manya singla":"Manya Singla"
+};
+function canonName(n) {
+  if (NAME_ALIASES[n]) return NAME_ALIASES[n];
+  const k = String(n||"").toLowerCase().replace(/\s+/g,"");
+  for (const [alias, canon] of Object.entries(NAME_ALIASES)) {
+    if (alias.toLowerCase().replace(/\s+/g,"") === k) return canon;
+  }
+  return n;
+}
+
+// ── CORE: Sync one student's attendance ───────────────────────
+// Reads ALL admin attendance docs, finds this student's marks,
+// writes to student Firestore attendance_summary/{hash}/months/{mm}
+async function syncStudentAttendance(nameHash, normName) {
+  // 1. Read all admin attendance docs
+  const attSnap = await getDocs(collection(adminDb, "attendance"));
+
+  // 2. Build month map: "yyyy-mm" → { sessions: { safeDocId: {...} } }
+  const monthMap = new Map();
+
+  for (const attDoc of attSnap.docs) {
+    const docId = attDoc.id;
+    const data  = attDoc.data();
+    const parsed = parseDocId(docId);
+    if (!parsed) continue;
+
+    const {date, mode} = parsed;
+    const title = typeof data._title === "string" ? data._title : "";
+
+    // Check every field in the doc for this student's name
+    for (const [key, value] of Object.entries(data)) {
+      if (key.startsWith("_")) continue;
+      if (value !== "present" && value !== "half") continue;
+
+      // Canonicalise the key (handle aliases)
+      const canon = canonName(key);
+      const keyHash = await computeNameHash(canon);
+
+      if (keyHash !== nameHash) continue;
+
+      // Found this student's mark
+      const mk = monthKey(date);
+      if (!monthMap.has(mk)) monthMap.set(mk, {sessions:{}});
+      monthMap.get(mk).sessions[safeKey(docId)] = {
+        date, mode, title, status: value, adminDocId: docId
+      };
+    }
+  }
+
+  // 3. Clear existing monthly docs for this student
+  const existingMonths = await getDocs(
+    collection(studentDb, "attendance_summary", nameHash, "months")
+  );
+  if (!existingMonths.empty) {
+    const clearBatch = writeBatch(studentDb);
+    existingMonths.forEach(d => clearBatch.delete(d.ref));
+    await clearBatch.commit();
+  }
+
+  // 4. Write new monthly docs (batch, max 500 per batch but months<<500)
+  if (monthMap.size > 0) {
+    const writeBatchObj = writeBatch(studentDb);
+    for (const [mk, monthData] of monthMap) {
+      const ref = doc(studentDb, "attendance_summary", nameHash, "months", mk);
+      writeBatchObj.set(ref, {sessions: monthData.sessions, lastUpdated: serverTimestamp()});
+    }
+    await writeBatchObj.commit();
+  }
+
+  // 5. Recompute root totals
+  let present=0, half=0, total=0;
+  for (const [, monthData] of monthMap) {
+    for (const session of Object.values(monthData.sessions)) {
+      total++;
+      if (session.status==="present") present++;
+      else if (session.status==="half") half++;
+    }
+  }
+  const absent = total - present - half;
+
+  await setDoc(
+    doc(studentDb, "attendance_summary", nameHash),
+    {presentCount:present, halfCount:half, absentCount:absent, totalSessions:total,
+     normName, lastUpdated: serverTimestamp()},
+    {merge:true}
+  );
+
+  return {total, present, half, absent};
+}
+
+// ── Approve a student ─────────────────────────────────────────
+async function approveStudent(uid, nameHash, normName, nameMatchVerified) {
+  if (!nameMatchVerified) { say("⚠️ Please confirm name matches attendance list first."); return; }
+
+  // Cannot approve own account
+  if (uid === ADMIN_UID_STUDENT_PROJECT) { say("Cannot modify your own account."); return; }
+
+  syncBarShow("🔄 Approving and syncing attendance…");
+  try {
+    // 1. Update student user doc
+    await updateDoc(doc(studentDb,"users",uid), {
+      status: "approved",
+      nameMatchVerified: true,
+      approvedAt: serverTimestamp(),
+      approvedBy: ADMIN_UID_STUDENT_PROJECT
+    });
+    // 2. Update pending_approvals
+    await setDoc(doc(studentDb,"pending_approvals",uid), {status:"approved", updatedAt:serverTimestamp()}, {merge:true});
+    // 3. Sync this student's attendance immediately
+    const result = await syncStudentAttendance(nameHash, normName);
+    syncBarHide();
+    say(`✅ Approved! Synced ${result.total} sessions (${result.present}P / ${result.half}H / ${result.absent}A)`);
+  } catch(err) {
+    syncBarHide();
+    console.error("Approve failed:", err);
+    say("Error: " + (err.message || "Could not approve."), 4000);
+  }
+}
+
+// ── Reject a student ──────────────────────────────────────────
+async function rejectStudent(uid, name) {
+  if (uid === ADMIN_UID_STUDENT_PROJECT) { say("Cannot modify your own account."); return; }
+  const note = prompt(`Rejection note for "${name}" (optional):`);
+  if (note === null) return;
+  try {
+    await updateDoc(doc(studentDb,"users",uid), {
+      status:"rejected", nameMatchVerified:false,
+      rejectedAt: serverTimestamp(), rejectedBy: ADMIN_UID_STUDENT_PROJECT,
+      rejectionNote: note||""
+    });
+    await setDoc(doc(studentDb,"pending_approvals",uid), {status:"rejected", updatedAt:serverTimestamp()}, {merge:true});
+    say(`❌ Rejected: ${name}`);
+  } catch(err) {
+    say("Error: " + (err.message||"Could not reject."), 4000);
+  }
+}
+
+// ── Re-sync one student ───────────────────────────────────────
+async function resyncStudent(uid, nameHash, normName, btnEl) {
+  if (!nameHash) { say("No nameHash — cannot sync."); return; }
+  if (btnEl) { btnEl.disabled=true; btnEl.textContent="Syncing…"; }
+  syncBarShow(`🔄 Syncing ${normName}…`);
+  try {
+    const result = await syncStudentAttendance(nameHash, normName);
+    syncBarHide();
+    say(`✅ Synced: ${result.total} sessions (${result.present}P / ${result.half}H / ${result.absent}A)`);
+  } catch(err) {
+    syncBarHide();
+    say("Sync failed: " + (err.message||"Unknown error."), 4000);
+  }
+  if (btnEl) { btnEl.disabled=false; btnEl.textContent="🔄 Sync"; }
+}
+
+// ── Sync ALL approved students ────────────────────────────────
+G("syncAllBtn").addEventListener("click", async () => {
+  if (!confirm("Sync attendance for ALL approved students? This may take a minute.")) return;
+  G("syncAllBtn").disabled=true; G("syncAllBtn").textContent="Syncing…";
+  syncBarShow("🔄 Syncing all students…");
+  try {
+    const usersSnap = await getDocs(query(collection(studentDb,"users"), orderBy("createdAt","desc")));
+    const approved  = usersSnap.docs.filter(d => d.data().status==="approved" && d.data().nameHash);
+    let done=0;
+    for (const userDoc of approved) {
+      const u = userDoc.data();
+      syncBarShow(`🔄 Syncing ${u.fullName||u.normName||"student"} (${done+1}/${approved.length})…`);
+      await syncStudentAttendance(u.nameHash, u.normName||u.fullName||"");
+      done++;
+    }
+    syncBarHide();
+    say(`✅ Synced ${done} students.`, 4000);
+  } catch(err) {
+    syncBarHide();
+    say("Sync all failed: " + (err.message||"Unknown."), 4000);
+  }
+  G("syncAllBtn").disabled=false; G("syncAllBtn").textContent="🔄 Sync All Attendance";
+});
+
+// ── Render student lists ──────────────────────────────────────
+function renderList(containerId, students, status) {
+  const el = G(containerId);
+  if (!students.length) {
+    el.innerHTML=`<div class="empty"><div class="empty-icon">${status==="pending"?"👥":status==="approved"?"✅":"❌"}</div>No ${status} accounts.</div>`;
+    return;
+  }
+  el.innerHTML = students.map(s=>`
+    <div class="s-row" id="row-${s.uid}">
+      <div class="s-av">${initials(s.fullName)}</div>
+      <div class="s-info">
+        <div class="s-name">${esc(s.fullName||"Unknown")}</div>
+        <div class="s-meta">
+          <span>📚 ${esc(s.course||"—")}</span>
+          <span>🎓 ${esc(s.year||"—")} Year</span>
+          <span class="pill pill-${status}">${status.charAt(0).toUpperCase()+status.slice(1)}</span>
+          ${s.nameMatchVerified?'<span class="pill" style="background:#e8f5e9;color:#2e7d32">✓ Verified</span>':""}
+        </div>
+        ${status==="pending"?`
+        <div class="nm-row">
+          <input type="checkbox" id="nm-${s.uid}">
+          <label for="nm-${s.uid}">I confirm <strong>${esc(s.fullName)}</strong> matches an attendance record</label>
+        </div>`:""}
+        <div class="s-meta" style="margin-top:4px">
+          ${s.approvedAt?`<span>✅ ${ts(s.approvedAt)}</span>`:""}
+          ${s.rejectedAt?`<span>❌ ${ts(s.rejectedAt)}</span>`:""}
+          ${s.rejectionNote?`<span>📝 ${esc(s.rejectionNote)}</span>`:""}
+        </div>
+      </div>
+      <div class="s-actions">
+        ${status==="pending"?`
+          <button class="btn-approve" id="appBtn-${s.uid}"
+            onclick="window._approve('${s.uid}','${esc(s.nameHash||"")}','${esc(s.normName||s.fullName||"")}')">
+            ✅ Approve
+          </button>
+          <button class="btn-reject"
+            onclick="window._reject('${s.uid}','${esc(s.fullName||"")}')">
+            ❌ Reject
+          </button>`:""}
+        ${status==="rejected"?`
+          <button class="btn-approve"
+            onclick="window._reapprove('${s.uid}','${esc(s.nameHash||"")}','${esc(s.normName||s.fullName||"")}')">
+            ↩ Re-approve
+          </button>`:""}
+        ${status==="approved"?`
+          <button class="btn-reject"
+            onclick="window._reject('${s.uid}','${esc(s.fullName||"")}')">
+            Revoke
+          </button>
+          <button class="btn-sync" id="syncBtn-${s.uid}"
+            onclick="window._resync('${s.uid}','${esc(s.nameHash||"")}','${esc(s.normName||s.fullName||"")}')">
+            🔄 Sync
+          </button>`:""}
+      </div>
+    </div>`).join("");
+}
+
+// ── Expose action handlers ────────────────────────────────────
+window._approve = async (uid, nameHash, normName) => {
+  const nmEl = document.getElementById("nm-"+uid);
+  const verified = nmEl ? nmEl.checked : false;
+  const btn = document.getElementById("appBtn-"+uid);
+  if (btn) { btn.disabled=true; btn.textContent="…"; }
+  await approveStudent(uid, nameHash, normName, verified);
+  if (btn && !verified) { btn.disabled=false; btn.textContent="✅ Approve"; }
+};
+window._reject    = (uid, name)              => rejectStudent(uid, name);
+window._reapprove = async (uid, hash, norm)  => {
+  // Re-approve: set nameMatchVerified=true and sync
+  try {
+    await updateDoc(doc(studentDb,"users",uid),{
+      status:"approved", nameMatchVerified:true,
+      approvedAt:serverTimestamp(), approvedBy:ADMIN_UID_STUDENT_PROJECT
+    });
+    syncBarShow("🔄 Syncing attendance…");
+    const r = await syncStudentAttendance(hash, norm);
+    syncBarHide();
+    say(`✅ Re-approved & synced ${r.total} sessions.`);
+  } catch(e) { syncBarHide(); say("Error: "+(e.message||"failed"),4000); }
+};
+window._resync = (uid, hash, norm) => {
+  resyncStudent(uid, hash, norm, document.getElementById("syncBtn-"+uid));
+};
+
+// ── Auth ──────────────────────────────────────────────────────
+G("lgBtn").addEventListener("click", async () => {
+  const user = G("lgUser").value.trim();
+  const pass = G("lgPass").value;
+  if (!user||!pass) { G("authMsg").textContent="Enter username and password."; return; }
+  G("lgBtn").disabled=true; G("lgBtn").textContent="Signing in…"; G("authMsg").textContent="";
+  try {
+    const cred = await signInWithEmailAndPassword(adminAuth, toEmail(user), pass);
+    if (cred.user.uid !== ADMIN_UID_ADMIN_PROJECT) {
+      await signOut(adminAuth);
+      G("authMsg").textContent="This account does not have admin access.";
+      G("lgBtn").disabled=false; G("lgBtn").textContent="Sign In";
+    }
+  } catch(_) {
+    G("authMsg").textContent="Invalid username or password.";
+    G("lgBtn").disabled=false; G("lgBtn").textContent="Sign In";
+  }
+});
+G("lgPass").addEventListener("keydown", e=>{ if(e.key==="Enter") G("lgBtn").click(); });
+G("logoutBtn").addEventListener("click", async ()=>{ if(unsubUsers) unsubUsers(); await signOut(adminAuth); });
+
+let unsubUsers=null;
+onAuthStateChanged(adminAuth, user=>{
+  if (!user || user.uid !== ADMIN_UID_ADMIN_PROJECT) {
+    G("authGate").style.display="flex"; G("appShell").style.display="none";
+    if(unsubUsers){unsubUsers();unsubUsers=null;}
+    G("lgBtn").disabled=false; G("lgBtn").textContent="Sign In";
+    return;
+  }
+  G("authGate").style.display="none"; G("appShell").style.display="block";
+  G("adminName").textContent=user.email.split("@")[0];
+  startListeners();
+});
+
+// ── Tab navigation ────────────────────────────────────────────
+document.querySelectorAll(".tab-btn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p=>p.classList.remove("active"));
+    btn.classList.add("active");
+    G("tab-"+btn.dataset.tab).classList.add("active");
+  });
+});
+
+// ── Live listeners (student Firestore) ───────────────────────
+function startListeners() {
+  if (unsubUsers) unsubUsers();
+  unsubUsers = onSnapshot(
+    query(collection(studentDb,"users"), orderBy("createdAt","desc")),
+    snap=>{
+      const all      = snap.docs.map(d=>({uid:d.id,...d.data()}));
+      const pending  = all.filter(u=>u.status==="pending");
+      const approved = all.filter(u=>u.status==="approved");
+      const rejected = all.filter(u=>u.status==="rejected");
+      G("pendingBadge").textContent=pending.length;
+      renderList("pendingList",  pending,  "pending");
+      renderList("approvedList", approved, "approved");
+      renderList("rejectedList", rejected, "rejected");
+    },
+    err=>{ console.error("Users listener:",err); say("Failed to load students — check Firestore rules.",4000); }
+  );
+}
+</script>
+</body>
+</html>

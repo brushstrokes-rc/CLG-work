@@ -19,13 +19,18 @@
 //    const view = mountStudentActivities(box, { names: [student.name] });
 //    // when the profile page is closed:  view.destroy();
 //
-//  Optional: sign in automatically instead of showing the small form:
+//  The admin signs in ONCE in the small "Connect" form; the sign-in is remembered in that
+//  browser, so reloads and reopens show the activities straight away. "Disconnect" (top
+//  right of the box) forgets it, e.g. on a shared computer.
+//
+//  Optional: sign in from your own code instead of the form:
 //    import { connectStudentData } from "./student-activities.js";
 //    await connectStudentData("admin-email", "admin-password");
 // ============================================================
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import {
-  initializeAuth, inMemoryPersistence, onAuthStateChanged, signInWithEmailAndPassword
+  initializeAuth, indexedDBLocalPersistence, browserLocalPersistence,
+  onAuthStateChanged, signInWithEmailAndPassword, signOut
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import {
   getFirestore, collection, query, where, onSnapshot
@@ -47,7 +52,9 @@ function link() {
   if (_link) return _link;
   const app = getApps().find(a => a.name === APP_NAME) || initializeApp(STUDENT_FIREBASE, APP_NAME);
   _link = {
-    auth: initializeAuth(app, { persistence: inMemoryPersistence }),   // session lives in memory only
+    // The sign-in is remembered in THIS browser (only a Firebase session token, never the password),
+    // so reloads / reopens do not ask again. "Disconnect" in the box forgets it.
+    auth: initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] }),
     db: getFirestore(app)
   };
   return _link;
@@ -57,6 +64,7 @@ export async function connectStudentData(email, password) {
   return signInWithEmailAndPassword(link().auth, email, password);
 }
 export const studentDataConnected = () => !!link().auth.currentUser;
+export const disconnectStudentData = () => signOut(link().auth);
 
 // ── same name matching as the student website ────────────────
 // (must stay identical to normalizeName / nameHash in the student site's bs.js)
@@ -95,6 +103,8 @@ function injectStyles() {
 .sa-badges{display:flex;gap:8px;align-items:center}
 .sa-count{font-size:.8rem;font-weight:700;padding:3px 10px;border-radius:999px;background:rgba(122,63,201,.12);color:#6a35b5}
 .sa-live{font-size:.78rem;font-weight:700;color:#1f8a3a}
+.sa-off{padding:3px 8px;font:inherit;font-size:.78rem;font-weight:700;color:inherit;opacity:.7;background:none;border:0;cursor:pointer;text-decoration:underline}
+.sa-off:hover{opacity:1}
 .sa-search{display:block;width:100%;margin-top:12px;height:42px;padding:0 12px;font:inherit;color:inherit;
   background:transparent;border:1.5px solid var(--sa-border,rgba(0,0,0,.25));border-radius:10px;outline:none}
 .sa-search:focus{border-color:#7a3fc9;box-shadow:0 0 0 3px rgba(122,63,201,.2)}
@@ -163,7 +173,9 @@ export function mountStudentActivities(container, student) {
   const badges = mk("div", "sa-badges");
   const live = mk("span", "sa-live", "● Live"); live.hidden = true;
   const count = mk("span", "sa-count"); count.hidden = true;
-  badges.append(live, count); head.appendChild(badges);
+  const off = mk("button", "sa-off", "Disconnect"); off.type = "button"; off.hidden = true;
+  off.title = "Forget the student-data sign-in on this browser";
+  badges.append(live, count, off); head.appendChild(badges);
 
   // connect form (shown until the admin account is signed in to the student project)
   const connect = mk("form", "sa-connect"); connect.hidden = true;
@@ -220,15 +232,16 @@ export function mountStudentActivities(container, student) {
     });
   }
   search.addEventListener("input", render);
+  off.addEventListener("click", () => { disconnectStudentData().catch(e => console.error(e)); });
 
-  function showConnect() { connect.hidden = false; body.hidden = true; live.hidden = true; count.hidden = true; }
+  function showConnect() { connect.hidden = false; body.hidden = true; live.hidden = true; count.hidden = true; off.hidden = true; }
   function stopSnap() { if (unsubSnap) unsubSnap(); unsubSnap = null; items = []; }
 
   async function subscribe() {
     if (unsubSnap || destroyed) return;
     if (!hashes) hashes = [...new Set(await Promise.all(names.map(nameHash)))].slice(0, 30);
     if (destroyed || unsubSnap) return;
-    connect.hidden = true; body.hidden = false;
+    connect.hidden = true; body.hidden = false; off.hidden = false;
     if (!hashes.length) { err.textContent = "No student name to look up."; err.hidden = false; return; }
     const { db } = link();
     unsubSnap = onSnapshot(

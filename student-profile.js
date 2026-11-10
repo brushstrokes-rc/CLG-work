@@ -296,7 +296,8 @@ function showMine(id) {
 }
 
 // ---------- Activities (BS student website) — shown below the attendance boxes, live ----------
-// Student ne signup me jo naam diya, wahi naam (case / spaces ka farq nahi) match hota hai; canonName bhi try hota hai.
+// Strict match: profile ka naam == student ne signup me jo naam diya (capital / extra spaces ka farq nahi).
+// Aliases (canonName) yahan use nahi hote: "Manya" aur "Manya Singla" ke activities alag-alag rehte hain.
 function destroyActivities() {
   if (actView) { actView.destroy(); actView = null; }
   actName = "";
@@ -312,11 +313,8 @@ function syncActivities(id) {
   const anchor = $("spBoxes");
   if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(host, anchor.nextSibling);
   else $("viewStudentProfile").appendChild(host);
-  const names = [cur.name];
-  const canon = canonName(cur.name);
-  if (canon !== cur.name) names.push(canon);
   actName = cur.name;
-  actView = mountStudentActivities(host, { names: names });
+  actView = mountStudentActivities(host, { names: [cur.name] });
 }
 
 function leaveToOrigin() {

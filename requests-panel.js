@@ -392,7 +392,7 @@ let unsubUsers = null;
 function startListener() {
   if (unsubUsers) return; // already listening
   unsubUsers = onSnapshot(
-    query(collection(studentDb, "users"), orderBy("createdAt", "desc")),
+    collection(studentDb, "users"),
     snap => {
       allStudents = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
 
@@ -408,6 +408,9 @@ function startListener() {
       // Re-render if panel is open
       if (panelOpen) renderPanel();
     },
-    err => console.error("Requests panel listener:", err)
+    err => {
+  console.error("Requests panel listener:", err);
+  toast("⚠️ Requests load nahi hue: " + (err.code || err.message), 5000);
+}
   );
 }

@@ -12,6 +12,8 @@ import {
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, setPersistence, inMemoryPersistence }
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 
+console.log("[REQ] requests-panel.js loaded");
+
 // ── Student project config (public — safe to expose) ─────────
 const STUDENT_CFG = {
   apiKey: "AIzaSyATW9btDBBsJg32Qcj84yEU34l1OzX5G_Q",
@@ -40,6 +42,7 @@ async function ensureStudentAuth() {
   if (!pw) { toast("⚠️ Student project login nahi hua, dobara login karo", 5000); return false; }
   try {
     await signInWithEmailAndPassword(studentAuth, STUDENT_ADMIN_EMAIL, pw);
+    console.log("[REQ] student auth OK:", studentAuth.currentUser && studentAuth.currentUser.uid);
     return true;
   } catch (e) {
     toast("⚠️ Student login failed: " + (e.code || e.message), 6000);
@@ -387,6 +390,7 @@ function attachAuthListener() {
     const defaultApp = getApp(); // throws if not ready yet
     const adminAuth  = getAuth(defaultApp);
     onAuthStateChanged(adminAuth, user => {
+      console.log("[REQ] admin auth state:", user && user.uid);
       if (user && user.uid === ADMIN_UID_ADMIN_PROJECT) {
         requestsBtn.style.display        = "flex";
         requestsBtn.style.alignItems     = "center";
@@ -413,6 +417,7 @@ async function startListener() {
   unsubUsers = onSnapshot(
     collection(studentDb, "users"),
     snap => {
+      console.log("[REQ] users docs received:", snap.size);
       allStudents = snap.docs
         .map(d => ({ uid: d.id, ...d.data() }))
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));

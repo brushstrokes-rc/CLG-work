@@ -24,10 +24,21 @@ const STUDENT_CFG = {
   appId: "1:140790604149:web:18dc0eaf59d9672ce8333c"
 };
 
-const ADMIN_UID_ADMIN_PROJECT   = "S5SAl58EhKMiH949NHYKVcwRapH3";
-const ADMIN_UID_STUDENT_PROJECT = "25Tcm6EsmDSwrznOhNwZaLMV0zg1";
+// Admin-project UIDs jo requests panel dekh aur approve kar sakte hain
+const ADMIN_UIDS_ADMIN_PROJECT = [
+  "S5SAl58EhKMiH949NHYKVcwRapH3",
+  "tU1b475hZufJKVH0mMHuEBjUXR72",
+  "GEpqARVfJoOU2J9NcDrajinwmyI2"
+];
+const ADMIN_UID_STUDENT_PROJECT = "25Tcm6EsmDSwrznOhNwZaLMV0zg1"; // fallback label only
 
-const STUDENT_ADMIN_EMAIL = "d51ae77904d69eb36a3a1c774def03c1a79c1dbc@students.brushstrokes.app";
+// Admin-project UID -> us admin ki STUDENT project wali email.
+// Jiski yahan entry nahi hai wo DEFAULT email try karega, fail hua toh login poochega.
+const STUDENT_ADMIN_EMAILS = {
+  "S5SAl58EhKMiH949NHYKVcwRapH3": "2058f51bf5a43aae1b7d5ad3d5f147bb8a6d4f6e@students.brushstrokes.app",
+  "tU1b475hZufJKVH0mMHuEBjUXR72": "d51ae77904d69eb36a3a1c774def03c1a79c1dbc@students.brushstrokes.app"
+  // "GEpqARVfJoOU2J9NcDrajinwmyI2": "3rd admin ki student-project email",
+};
 
 // ── Init student Firestore (separate app) ─────────────────────
 const studentApp = getApps().find(a => a.name === "student-panel")
@@ -36,13 +47,40 @@ const studentDb   = getFirestore(studentApp);
 const studentAuth = getAuth(studentApp);
 setPersistence(studentAuth, inMemoryPersistence);
 
+let unsubUsers = null;
+
+function currentStudentAdminUid() {
+  return (studentAuth.currentUser && studentAuth.currentUser.uid) || ADMIN_UID_STUDENT_PROJECT;
+}
+
 async function ensureStudentAuth() {
   if (studentAuth.currentUser) return true;
-  const pw = window.__bsAdminPw;
-  if (!pw) { toast("⚠️ Student project login nahi hua, dobara login karo", 5000); return false; }
+
+  let adminUid = null;
+  try { adminUid = getAuth(getApp()).currentUser && getAuth(getApp()).currentUser.uid; } catch (_) {}
+
+  const email = STUDENT_ADMIN_EMAILS[adminUid];
+  const pw    = window.__bsAdminPw;
+
+  // 1) auto-login: mapped/default email + admin login password
+  if (pw && email) {
+    try {
+      await signInWithEmailAndPassword(studentAuth, email, pw);
+      console.log("[REQ] student auth OK:", studentAuth.currentUser.uid);
+      return true;
+    } catch (e) {
+      console.warn("[REQ] auto student login failed:", e.code);
+    }
+  }
+
+  // 2) fallback: is admin ka student-project account manually poochho
+  const em = window.prompt("Student project admin email daalo (requests ke liye):", "");
+  if (!em) return false;
+  const pass = window.prompt("Us account ka password:", "");
+  if (!pass) return false;
   try {
-    await signInWithEmailAndPassword(studentAuth, STUDENT_ADMIN_EMAIL, pw);
-    console.log("[REQ] student auth OK:", studentAuth.currentUser && studentAuth.currentUser.uid);
+    await signInWithEmailAndPassword(studentAuth, em.trim(), pass);
+    console.log("[REQ] student auth OK (manual):", studentAuth.currentUser.uid);
     return true;
   } catch (e) {
     toast("⚠️ Student login failed: " + (e.code || e.message), 6000);
@@ -214,7 +252,7 @@ function renderPanel() {
         try {
           await updateDoc(doc(studentDb,"users",s.uid), {
             status: "approved", nameMatchVerified: true,
-            approvedAt: serverTimestamp(), approvedBy: ADMIN_UID_STUDENT_PROJECT
+            approvedAt: serverTimestamp(), approvedBy: currentStudentAdminUid()
           });
           await setDoc(doc(studentDb,"pending_approvals",s.uid),
             {status:"approved", updatedAt:serverTimestamp()}, {merge:true});
@@ -235,7 +273,7 @@ function renderPanel() {
         try {
           await updateDoc(doc(studentDb,"users",s.uid), {
             status:"rejected", nameMatchVerified:false,
-            rejectedAt:serverTimestamp(), rejectedBy:ADMIN_UID_STUDENT_PROJECT,
+            rejectedAt:serverTimestamp(), rejectedBy:currentStudentAdminUid(),
             rejectionNote: note||""
           });
           await setDoc(doc(studentDb,"pending_approvals",s.uid),
@@ -251,7 +289,7 @@ function renderPanel() {
         try {
           await updateDoc(doc(studentDb,"users",s.uid), {
             status:"approved", nameMatchVerified:true,
-            approvedAt:serverTimestamp(), approvedBy:ADMIN_UID_STUDENT_PROJECT
+            approvedAt:serverTimestamp(), approvedBy:currentStudentAdminUid()
           });
           toast("✅ Re-approved! Syncing…", 8000);
           const r = await syncStudentAttendance(s.nameHash, s.normName||s.fullName||"");
@@ -391,7 +429,7 @@ function attachAuthListener() {
     const adminAuth  = getAuth(defaultApp);
     onAuthStateChanged(adminAuth, user => {
       console.log("[REQ] admin auth state:", user && user.uid);
-      if (user && user.uid === ADMIN_UID_ADMIN_PROJECT) {
+      if (user && ADMIN_UIDS_ADMIN_PROJECT.includes(user.uid)) {
         requestsBtn.style.display        = "flex";
         requestsBtn.style.alignItems     = "center";
         requestsBtn.style.justifyContent = "center";
@@ -400,6 +438,8 @@ function attachAuthListener() {
         requestsBtn.style.display   = "none";
         requestsBadge.style.display = "none";
         closePanel();
+        if (unsubUsers) { unsubUsers(); unsubUsers = null; }
+        try { studentAuth.signOut(); } catch (_) {}
       }
     });
   } catch (_) {
@@ -410,7 +450,6 @@ function attachAuthListener() {
 attachAuthListener();
 
 // ── Live listener — student users ─────────────────────────────
-let unsubUsers = null;
 async function startListener() {
   if (unsubUsers) return;
   if (!(await ensureStudentAuth())) return;

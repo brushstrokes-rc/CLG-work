@@ -489,6 +489,38 @@ document.documentElement.dataset.theme=__t;
   width:56px;height:56px;font-size:26px;cursor:pointer;
   box-shadow:0 4px 14px rgba(0,0,0,0.35);display:none;">🎨</button>
 
+<!-- Student Requests Button (bottom-left) -->
+<button id="requestsBtn" title="Student Registration Requests" style="
+  position:fixed;bottom:24px;left:24px;z-index:1000;
+  background:#800020;color:white;border:none;border-radius:50%;
+  width:56px;height:56px;font-size:22px;cursor:pointer;
+  box-shadow:0 4px 14px rgba(0,0,0,0.35);display:none;">👥</button>
+
+<!-- Requests count badge -->
+<span id="requestsBadge" style="
+  position:fixed;bottom:66px;left:62px;z-index:1001;
+  background:#ff3b30;color:white;border-radius:999px;
+  font-size:11px;font-weight:800;min-width:18px;height:18px;
+  display:none;align-items:center;justify-content:center;padding:0 4px;
+  font-family:'Nunito',sans-serif;">0</span>
+
+<!-- Requests Panel (slide-up from bottom-left) -->
+<div id="requestsPanel" style="
+  display:none;position:fixed;bottom:90px;left:24px;
+  width:340px;max-height:520px;
+  background:var(--surface,#fff);border-radius:16px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.22);z-index:999;
+  overflow:hidden;border:1.5px solid var(--border,#e8d5c0);
+  flex-direction:column;">
+  <div style="background:#800020;color:white;padding:12px 16px;
+    font-weight:800;font-size:15px;display:flex;justify-content:space-between;align-items:center;
+    font-family:'Nunito',sans-serif;">
+    👥 Student Requests
+    <span id="requestsPanelClose" style="cursor:pointer;font-size:18px;opacity:.8">✕</span>
+  </div>
+  <div id="requestsContent" style="overflow-y:auto;max-height:440px;padding:12px;"></div>
+</div>
+
 <div id="chatBox" style="display:none;position:fixed;bottom:90px;right:24px;
   width:320px;height:430px;background:white;border-radius:16px;
   box-shadow:0 8px 32px rgba(0,0,0,0.22);z-index:999;
@@ -523,5 +555,6 @@ document.documentElement.dataset.theme=__t;
 <!-- index.html mein ye check karo — type="module" hona chahiye -->
 <script type="module" src="Core-members-view.js"></script>
 <script src="seasonal.js" defer></script>
+<script type="module" src="requests-panel.js"></script>
 </body>
 </html>

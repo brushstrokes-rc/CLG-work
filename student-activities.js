@@ -8,8 +8,12 @@
 //
 //  The records live in the student Firebase project (collection
 //  "activities"). This file opens a SECOND, separate Firebase app that
-//  points at that project, so your existing admin Firebase (attendance,
-//  login, users ...) is never touched.
+//  points at that project (read only), so your existing admin Firebase
+//  (attendance, login, users ...) is never touched.
+//
+//  No sign-in / Connect form: the "activities" read rule in the student
+//  Firestore rules is open, so every admin (PC or mobile) sees the data
+//  straight away. Writing stays with the student who owns the record.
 //
 //  Usage (inside the student profile page code):
 //
@@ -18,23 +22,9 @@
 //    profileRoot.appendChild(box);                       // below the attendance data
 //    const view = mountStudentActivities(box, { names: [student.name] });
 //    // when the profile page is closed:  view.destroy();
-//
-//  The admin signs in ONCE in the small "Connect" form; the sign-in is remembered in that
-//  browser, so reloads and reopens show the activities straight away. "Disconnect" (top
-//  right of the box) forgets it, e.g. on a shared computer.
-//
-//  Optional: sign in from your own code instead of the form:
-//    import { connectStudentData } from "./student-activities.js";
-//    await connectStudentData("admin-email", "admin-password");
 // ============================================================
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-import {
-  initializeAuth, indexedDBLocalPersistence, browserLocalPersistence,
-  onAuthStateChanged, signInWithEmailAndPassword, signOut
-} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-import {
-  getFirestore, collection, query, where, onSnapshot
-} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
 const STUDENT_FIREBASE = {
   apiKey: "AIzaSyATW9btDBBsJg32Qcj84yEU34l1OzX5G_Q",
@@ -46,25 +36,14 @@ const STUDENT_FIREBASE = {
 };
 const APP_NAME = "bs-student-data";
 
-// ── second Firebase app (student project) ────────────────────
-let _link = null;
-function link() {
-  if (_link) return _link;
+// ── second Firebase app (student project, read only) ─────────
+let _db = null;
+function studentDb() {
+  if (_db) return _db;
   const app = getApps().find(a => a.name === APP_NAME) || initializeApp(STUDENT_FIREBASE, APP_NAME);
-  _link = {
-    // The sign-in is remembered in THIS browser (only a Firebase session token, never the password),
-    // so reloads / reopens do not ask again. "Disconnect" in the box forgets it.
-    auth: initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] }),
-    db: getFirestore(app)
-  };
-  return _link;
+  _db = getFirestore(app);
+  return _db;
 }
-
-export async function connectStudentData(email, password) {
-  return signInWithEmailAndPassword(link().auth, email, password);
-}
-export const studentDataConnected = () => !!link().auth.currentUser;
-export const disconnectStudentData = () => signOut(link().auth);
 
 // ── same name matching as the student website ────────────────
 // (must stay identical to normalizeName / nameHash in the student site's bs.js)
@@ -103,17 +82,10 @@ function injectStyles() {
 .sa-badges{display:flex;gap:8px;align-items:center}
 .sa-count{font-size:.8rem;font-weight:700;padding:3px 10px;border-radius:999px;background:rgba(122,63,201,.12);color:#6a35b5}
 .sa-live{font-size:.78rem;font-weight:700;color:#1f8a3a}
-.sa-off{padding:3px 8px;font:inherit;font-size:.78rem;font-weight:700;color:inherit;opacity:.7;background:none;border:0;cursor:pointer;text-decoration:underline}
-.sa-off:hover{opacity:1}
 .sa-search{display:block;width:100%;margin-top:12px;height:42px;padding:0 12px;font:inherit;color:inherit;
   background:transparent;border:1.5px solid var(--sa-border,rgba(0,0,0,.25));border-radius:10px;outline:none}
 .sa-search:focus{border-color:#7a3fc9;box-shadow:0 0 0 3px rgba(122,63,201,.2)}
-.sa-note{margin:12px 0 0;font-size:.9rem;opacity:.8;line-height:1.45}
 .sa-msg{margin:10px 0 0;padding:9px 12px;border-radius:8px;font-size:.88rem;font-weight:700;color:#a3231a;background:#fdecea;border:1px solid #f3b9b3}
-.sa-connect{display:grid;gap:8px;margin-top:12px;max-width:380px}
-.sa-connect input{height:40px;padding:0 12px;font:inherit;color:inherit;background:transparent;border:1.5px solid var(--sa-border,rgba(0,0,0,.25));border-radius:8px}
-.sa-btn{height:40px;padding:0 16px;font:inherit;font-weight:700;color:#fff;background:#7a3fc9;border:0;border-radius:8px;cursor:pointer}
-.sa-btn:disabled{opacity:.6;cursor:progress}
 .sa-list{display:grid;gap:12px;margin-top:14px}
 .sa-item{padding:14px;border-radius:12px;border:1px solid var(--sa-border,rgba(0,0,0,.12));background:rgba(122,63,201,.04)}
 .sa-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
@@ -173,31 +145,20 @@ export function mountStudentActivities(container, student) {
   const badges = mk("div", "sa-badges");
   const live = mk("span", "sa-live", "● Live"); live.hidden = true;
   const count = mk("span", "sa-count"); count.hidden = true;
-  const off = mk("button", "sa-off", "Disconnect"); off.type = "button"; off.hidden = true;
-  off.title = "Forget the student-data sign-in on this browser";
-  badges.append(live, count, off); head.appendChild(badges);
-
-  // connect form (shown until the admin account is signed in to the student project)
-  const connect = mk("form", "sa-connect"); connect.hidden = true;
-  const note = mk("p", "sa-note", "Sign in with the admin account of the student website's Firebase project to see this student's activities.");
-  const email = mk("input"); email.type = "email"; email.placeholder = "Admin email"; email.autocomplete = "username"; email.required = true;
-  const pass = mk("input"); pass.type = "password"; pass.placeholder = "Password"; pass.autocomplete = "current-password"; pass.required = true;
-  const cbtn = mk("button", "sa-btn", "Connect"); cbtn.type = "submit";
-  const cmsg = mk("p", "sa-msg"); cmsg.hidden = true;
-  connect.append(note, email, pass, cbtn, cmsg);
+  badges.append(live, count); head.appendChild(badges);
 
   // live list
-  const body = mk("div"); body.hidden = true;
+  const body = mk("div");
   const search = mk("input", "sa-search"); search.type = "search"; search.placeholder = "Search by event name…";
   search.setAttribute("aria-label", "Search activities by event name");
   const list = mk("div", "sa-list"); list.setAttribute("aria-live", "polite");
   const err = mk("p", "sa-msg"); err.hidden = true;
   body.append(search, err, list);
 
-  box.append(head, connect, body);
+  box.append(head, body);
   container.appendChild(box);
 
-  let items = [], unsubSnap = null, unsubAuth = null, destroyed = false, hashes = null;
+  let items = [], unsubSnap = null, destroyed = false;
 
   function render() {
     list.textContent = "";
@@ -232,20 +193,15 @@ export function mountStudentActivities(container, student) {
     });
   }
   search.addEventListener("input", render);
-  off.addEventListener("click", () => { disconnectStudentData().catch(e => console.error(e)); });
-
-  function showConnect() { connect.hidden = false; body.hidden = true; live.hidden = true; count.hidden = true; off.hidden = true; }
   function stopSnap() { if (unsubSnap) unsubSnap(); unsubSnap = null; items = []; }
 
   async function subscribe() {
     if (unsubSnap || destroyed) return;
-    if (!hashes) hashes = [...new Set(await Promise.all(names.map(nameHash)))].slice(0, 30);
+    const hashes = [...new Set(await Promise.all(names.map(nameHash)))].slice(0, 30);
     if (destroyed || unsubSnap) return;
-    connect.hidden = true; body.hidden = false; off.hidden = false;
     if (!hashes.length) { err.textContent = "No student name to look up."; err.hidden = false; return; }
-    const { db } = link();
     unsubSnap = onSnapshot(
-      query(collection(db, "activities"), where("nameHash", "in", hashes)),
+      query(collection(studentDb(), "activities"), where("nameHash", "in", hashes)),
       snap => {
         err.hidden = true; live.hidden = false;
         items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -255,33 +211,17 @@ export function mountStudentActivities(container, student) {
         console.error("Student activities listener failed", e);
         live.hidden = true;
         err.textContent = e && e.code === "permission-denied"
-          ? "Not allowed to read activities. Put this admin account's UID in the student Firestore rules (ADMIN_UID) and publish them."
+          ? "Not allowed to read activities. In the student Firestore rules, set the activities read rule to \"allow read: if true;\" and publish."
           : "Couldn't load activities. Check your connection.";
         err.hidden = false;
       }
     );
   }
-
-  connect.addEventListener("submit", async e => {
-    e.preventDefault();
-    cmsg.hidden = true; cbtn.disabled = true; cbtn.textContent = "Connecting…";
-    try { await connectStudentData(email.value.trim(), pass.value); pass.value = ""; }
-    catch (ex) {
-      console.error(ex);
-      cmsg.textContent = "Couldn't sign in. Check the admin email and password of the student Firebase project.";
-      cmsg.hidden = false;
-    } finally { cbtn.disabled = false; cbtn.textContent = "Connect"; }
-  });
-
-  unsubAuth = onAuthStateChanged(link().auth, user => {
-    if (destroyed) return;
-    if (user) subscribe(); else { stopSnap(); showConnect(); }
-  });
+  subscribe();
 
   return {
     destroy() {
       destroyed = true;
-      if (unsubAuth) unsubAuth();
       stopSnap();
       box.remove();
     }

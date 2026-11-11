@@ -9,7 +9,7 @@ import {
   onSnapshot, updateDoc, setDoc,
   query, orderBy, serverTimestamp, writeBatch, getDocs
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
-import { getAuth, onAuthStateChanged }
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, setPersistence, inMemoryPersistence }
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 
 // ── Student project config (public — safe to expose) ─────────
@@ -25,10 +25,27 @@ const STUDENT_CFG = {
 const ADMIN_UID_ADMIN_PROJECT   = "S5SAl58EhKMiH949NHYKVcwRapH3";
 const ADMIN_UID_STUDENT_PROJECT = "25Tcm6EsmDSwrznOhNwZaLMV0zg1";
 
+const STUDENT_ADMIN_EMAIL = "d51ae77904d69eb36a3a1c774def03c1a79c1dbc@students.brushstrokes.app";
+
 // ── Init student Firestore (separate app) ─────────────────────
 const studentApp = getApps().find(a => a.name === "student-panel")
   || initializeApp(STUDENT_CFG, "student-panel");
-const studentDb  = getFirestore(studentApp);
+const studentDb   = getFirestore(studentApp);
+const studentAuth = getAuth(studentApp);
+setPersistence(studentAuth, inMemoryPersistence);
+
+async function ensureStudentAuth() {
+  if (studentAuth.currentUser) return true;
+  const pw = window.__bsAdminPw;
+  if (!pw) { toast("⚠️ Student project login nahi hua, dobara login karo", 5000); return false; }
+  try {
+    await signInWithEmailAndPassword(studentAuth, STUDENT_ADMIN_EMAIL, pw);
+    return true;
+  } catch (e) {
+    toast("⚠️ Student login failed: " + (e.code || e.message), 6000);
+    return false;
+  }
+}
 
 // ── DOM refs ──────────────────────────────────────────────────
 const requestsBtn     = document.getElementById("requestsBtn");
@@ -389,28 +406,25 @@ attachAuthListener();
 
 // ── Live listener — student users ─────────────────────────────
 let unsubUsers = null;
-function startListener() {
-  if (unsubUsers) return; // already listening
+async function startListener() {
+  if (unsubUsers) return;
+  if (!(await ensureStudentAuth())) return;
   unsubUsers = onSnapshot(
     collection(studentDb, "users"),
     snap => {
-      allStudents = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      allStudents = snap.docs
+        .map(d => ({ uid: d.id, ...d.data() }))
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
-      // Update badge with pending count
       const pendingCount = allStudents.filter(s => s.status === "pending").length;
-      if (pendingCount > 0) {
-        requestsBadge.style.display = "flex";
-        requestsBadge.textContent   = pendingCount;
-      } else {
-        requestsBadge.style.display = "none";
-      }
+      requestsBadge.style.display = pendingCount > 0 ? "flex" : "none";
+      requestsBadge.textContent = pendingCount;
 
-      // Re-render if panel is open
       if (panelOpen) renderPanel();
     },
     err => {
-  console.error("Requests panel listener:", err);
-  toast("⚠️ Requests load nahi hue: " + (err.code || err.message), 5000);
-}
+      console.error("Requests panel listener:", err);
+      toast("⚠️ Requests load nahi hue: " + (err.code || err.message), 6000);
+    }
   );
 }

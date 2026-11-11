@@ -334,6 +334,7 @@ loginForm.addEventListener("submit", async function (e) {
   const password = document.getElementById("password").value;
   try {
     await signInWithEmailAndPassword(auth, toEmail(username), password);
+    window.__bsAdminPw = password;
     appLaunched = true;
     try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
     message.textContent = "Login successful!";

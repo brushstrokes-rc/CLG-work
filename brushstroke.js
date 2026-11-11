@@ -333,8 +333,8 @@ loginForm.addEventListener("submit", async function (e) {
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
   try {
-    await signInWithEmailAndPassword(auth, toEmail(username), password);
     window.__bsAdminPw = password;
+    await signInWithEmailAndPassword(auth, toEmail(username), password);
     appLaunched = true;
     try { localStorage.setItem("bs-had-account", "1"); } catch(e) {}
     message.textContent = "Login successful!";
@@ -343,6 +343,7 @@ loginForm.addEventListener("submit", async function (e) {
     startAttendanceListener();
     window.dispatchEvent(new Event("bs:enter"));
   } catch (err) {
+    window.__bsAdminPw = null;
     message.textContent = "Invalid username or password.";
     message.className = "error";
   }

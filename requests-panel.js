@@ -60,6 +60,10 @@ async function ensureStudentAuth() {
   try { adminUid = getAuth(getApp()).currentUser && getAuth(getApp()).currentUser.uid; } catch (_) {}
 
   const email = STUDENT_ADMIN_EMAILS[adminUid];
+  // login ke turant baad password set hone mein thodi der lag sakti hai, isliye 2s tak wait
+  for (let i = 0; i < 20 && !window.__bsAdminPw; i++) {
+    await new Promise(r => setTimeout(r, 100));
+  }
   const pw    = window.__bsAdminPw;
 
   // 1) auto-login: mapped/default email + admin login password

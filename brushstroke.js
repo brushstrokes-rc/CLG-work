@@ -30,7 +30,6 @@ window.bsComputeNameHash = async function(name) {
   return hex.slice(0, 40);
 };
 // Expose admin Firestore db for admin-dashboard to read attendance docs
-window.bsAdminDb = null; // set after db is ready (below)
 // ---------- Account storage (one account per device) ----------
 
 

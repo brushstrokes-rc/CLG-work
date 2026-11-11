@@ -345,6 +345,7 @@ function renderStudentRow(s, status) {
 let panelOpen = false;
 function openPanel() {
   panelOpen = true;
+  renderPanel();
   requestsPanel.style.display = "flex";
   requestsPanel.style.animation = "slideUpPanel .25s ease both";
 }

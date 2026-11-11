@@ -3,11 +3,11 @@
 // No separate login needed — uses the admin's existing Firebase Auth session.
 // Reads/writes to brushstrokes-student Firestore directly.
 
-import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import {
   getFirestore, collection, doc,
   onSnapshot, updateDoc, setDoc,
-  query, orderBy, serverTimestamp, writeBatch
+  query, orderBy, serverTimestamp, writeBatch, getDocs
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
@@ -65,7 +65,6 @@ async function syncStudentAttendance(nameHash, normName) {
   const adminDb = window.bsAdminDb;
   if (!adminDb) throw new Error("Admin DB not ready");
 
-  const { getDocs } = await import("https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js");
   const attSnap = await getDocs(collection(adminDb, "attendance"));
 
   const monthMap = new Map();
@@ -92,8 +91,7 @@ async function syncStudentAttendance(nameHash, normName) {
   }
 
   // Clear existing months
-  const { getDocs: gd2 } = await import("https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js");
-  const existingMonths = await gd2(
+  const existingMonths = await getDocs(
     collection(studentDb, "attendance_summary", nameHash, "months")
   );
   if (!existingMonths.empty) {
@@ -363,19 +361,31 @@ style.textContent = `
 document.head.appendChild(style);
 
 // ── Show button only when admin is logged in ──────────────────
-const adminAuth = getAuth();
-onAuthStateChanged(adminAuth, user => {
-  if (user && user.uid === ADMIN_UID_ADMIN_PROJECT) {
-    requestsBtn.style.display    = "flex";
-    requestsBtn.style.alignItems = "center";
-    requestsBtn.style.justifyContent = "center";
-    startListener();
-  } else {
-    requestsBtn.style.display  = "none";
-    requestsBadge.style.display = "none";
-    closePanel();
+// brushstroke.js uses the default Firebase app for auth.
+// We wait for it to be initialised (it loads before us via defer),
+// then attach onAuthStateChanged to that same default app's auth.
+function attachAuthListener() {
+  try {
+    const defaultApp = getApp(); // throws if not ready yet
+    const adminAuth  = getAuth(defaultApp);
+    onAuthStateChanged(adminAuth, user => {
+      if (user && user.uid === ADMIN_UID_ADMIN_PROJECT) {
+        requestsBtn.style.display        = "flex";
+        requestsBtn.style.alignItems     = "center";
+        requestsBtn.style.justifyContent = "center";
+        startListener();
+      } else {
+        requestsBtn.style.display   = "none";
+        requestsBadge.style.display = "none";
+        closePanel();
+      }
+    });
+  } catch (_) {
+    // Default app not ready yet — retry in 300ms
+    setTimeout(attachAuthListener, 300);
   }
-});
+}
+attachAuthListener();
 
 // ── Live listener — student users ─────────────────────────────
 let unsubUsers = null;

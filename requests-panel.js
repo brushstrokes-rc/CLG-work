@@ -36,8 +36,8 @@ const ADMIN_UID_STUDENT_PROJECT = "25Tcm6EsmDSwrznOhNwZaLMV0zg1"; // fallback la
 // Jiski yahan entry nahi hai wo DEFAULT email try karega, fail hua toh login poochega.
 const STUDENT_ADMIN_EMAILS = {
   "S5SAl58EhKMiH949NHYKVcwRapH3": "2058f51bf5a43aae1b7d5ad3d5f147bb8a6d4f6e@students.brushstrokes.app",
-  "tU1b475hZufJKVH0mMHuEBjUXR72": "d51ae77904d69eb36a3a1c774def03c1a79c1dbc@students.brushstrokes.app"
-  // "GEpqARVfJoOU2J9NcDrajinwmyI2": "3rd admin ki student-project email",
+  "tU1b475hZufJKVH0mMHuEBjUXR72": "d51ae77904d69eb36a3a1c774def03c1a79c1dbc@students.brushstrokes.app",
+  "GEpqARVfJoOU2J9NcDrajinwmyI2": "cd25e0735065c712c94d26a21014a8a0f1cb2791@students.brushstrokes.app"
 };
 
 // ── Init student Firestore (separate app) ─────────────────────
@@ -122,64 +122,62 @@ function safeKey(s)  { return String(s).replace(/[./]/g, "_"); }
 function monthKey(s) { return String(s || "").slice(0, 7); }
 
 // ── Sync one student's attendance ─────────────────────────────
-// Uses window.bsAdminDb (exposed by brushstroke.js) to read admin attendance
-async function syncStudentAttendance(nameHash, normName) {
-  const adminDb = window.bsAdminDb;
-  if (!adminDb) throw new Error("Admin DB not ready");
+const hashCache = new Map();
+async function hashOf(k) {
+  if (!hashCache.has(k)) hashCache.set(k, await computeNameHash(k));
+  return hashCache.get(k);
+}
+// admin ke purane spelling aliases (agar brushstroke.js ne expose kiya ho)
+const canon = k => (typeof window.bsCanonName === "function" ? window.bsCanonName(k) : k);
 
-  const attSnap = await getDocs(collection(adminDb, "attendance"));
+function stable(v) {
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    return "{" + Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + stable(v[k])).join(",") + "}";
+  }
+  return JSON.stringify(v);
+}
 
+// docsMap: Map(docId -> data) of admin "attendance" collection (drafts + saved events)
+async function buildMonthMap(nameHash, docsMap, seenNames) {
   const monthMap = new Map();
-  const seenNames = new Set();
-  const hashCache = new Map();
-  const hashOf = async k => {
-    if (!hashCache.has(k)) hashCache.set(k, await computeNameHash(k));
-    return hashCache.get(k);
-  };
-
-  for (const attDoc of attSnap.docs) {
-    const docId  = attDoc.id;
-    const data   = attDoc.data();
+  for (const [docId, data] of docsMap) {
     const parsed = parseDocId(docId);
     if (!parsed) continue;
     const { date, mode } = parsed;
     const title = typeof data._title === "string" ? data._title : "";
-
     for (const [key, value] of Object.entries(data)) {
       if (key.startsWith("_")) continue;
       if (value !== "present" && value !== "half") continue;
-      seenNames.add(key);
-      const keyHash = await hashOf(key);
-      if (keyHash !== nameHash) continue;
+      const ck = canon(key);
+      if (ck !== key && ck in data) continue;          // naya naam doc mein ho toh wahi jeetta hai
+      if (seenNames) seenNames.add(ck);
+      if ((await hashOf(ck)) !== nameHash) continue;
       const mk = monthKey(date);
       if (!monthMap.has(mk)) monthMap.set(mk, { sessions: {} });
-      monthMap.get(mk).sessions[safeKey(docId)] = {
-        date, mode, title, status: value, adminDocId: docId
-      };
+      monthMap.get(mk).sessions[safeKey(docId)] = { date, mode, title, status: value, adminDocId: docId };
     }
   }
+  return monthMap;
+}
 
-  // Clear existing months
-  const existingMonths = await getDocs(
-    collection(studentDb, "attendance_summary", nameHash, "months")
-  );
-  if (!existingMonths.empty) {
-    const cb = writeBatch(studentDb);
-    existingMonths.forEach(d => cb.delete(d.ref));
-    await cb.commit();
-  }
+async function writeStudentSummary(nameHash, normName, monthMap) {
+  const existing = await getDocs(collection(studentDb, "attendance_summary", nameHash, "months"));
+  const oldById = new Map();
+  existing.forEach(d => oldById.set(d.id, d));
 
-  // Write new months
-  if (monthMap.size > 0) {
-    const wb = writeBatch(studentDb);
-    for (const [mk, monthData] of monthMap) {
-      const ref = doc(studentDb, "attendance_summary", nameHash, "months", mk);
-      wb.set(ref, { sessions: monthData.sessions, lastUpdated: serverTimestamp() });
+  const wb = writeBatch(studentDb);
+  let ops = 0;
+  oldById.forEach((d, mk) => { if (!monthMap.has(mk)) { wb.delete(d.ref); ops++; } });
+  for (const [mk, md] of monthMap) {
+    const old = oldById.get(mk);
+    if (!old || stable(old.data().sessions || {}) !== stable(md.sessions)) {
+      wb.set(doc(studentDb, "attendance_summary", nameHash, "months", mk),
+             { sessions: md.sessions, lastUpdated: serverTimestamp() });
+      ops++;
     }
-    await wb.commit();
   }
+  if (ops) await wb.commit();
 
-  // Recompute totals
   let present = 0, half = 0, total = 0;
   for (const [, md] of monthMap) {
     for (const s of Object.values(md.sessions)) {
@@ -190,15 +188,94 @@ async function syncStudentAttendance(nameHash, normName) {
   }
   await setDoc(
     doc(studentDb, "attendance_summary", nameHash),
-    { presentCount: present, halfCount: half, absentCount: total-present-half,
+    { presentCount: present, halfCount: half, absentCount: total - present - half,
       totalSessions: total, normName, lastUpdated: serverTimestamp() },
     { merge: true }
   );
-  // names in the admin attendance data that look like this student (helps spot spelling mismatches)
+  return { total, present, half, absent: total - present - half };
+}
+
+// docsMap optional: na ho toh admin DB se padh leta hai (Sync button / approve)
+async function syncStudentAttendance(nameHash, normName, docsMap) {
+  const adminDb = window.bsAdminDb;
+  if (!docsMap) {
+    if (!adminDb) throw new Error("Admin DB not ready");
+    const snap = await getDocs(collection(adminDb, "attendance"));
+    docsMap = new Map(snap.docs.map(d => [d.id, d.data()]));
+  }
+  const seen = new Set();
+  const monthMap = await buildMonthMap(nameHash, docsMap, seen);
+  const r = await writeStudentSummary(nameHash, normName, monthMap);
+
   const words = String(normName || "").toLowerCase().split(/\s+/).filter(w => w.length >= 3);
-  const candidates = [...seenNames].filter(k => words.some(w => k.toLowerCase().includes(w))).slice(0, 6);
-  console.log("[REQ] sync:", { adminDocs: attSnap.size, matchedSessions: total, looksLike: candidates });
-  return { total, present, half, absent: total-present-half, docs: attSnap.size, candidates };
+  const candidates = [...seen].filter(k => words.some(w => k.toLowerCase().includes(w))).slice(0, 6);
+  console.log("[REQ] sync:", { adminDocs: docsMap.size, matchedSessions: r.total, looksLike: candidates });
+  return { ...r, docs: docsMap.size, candidates };
+}
+
+// ── Auto-sync: admin me attendance badalte hi student data update ─
+const attCache    = new Map();   // docId -> data (admin "attendance")
+const dirtyHashes = new Set();   // jin students ka data badla
+let attUnsub = null, attReady = false, flushTimer = null, flushChain = Promise.resolve(), attRetry = 0;
+
+async function markDirtyFrom(data) {
+  if (!data) return;
+  for (const [key, value] of Object.entries(data)) {
+    if (key.startsWith("_")) continue;
+    if (value !== "present" && value !== "half") continue;
+    dirtyHashes.add(await hashOf(canon(key)));
+  }
+}
+
+function flushDirty() {
+  flushChain = flushChain.then(async () => {
+    const hashes = [...dirtyHashes];
+    dirtyHashes.clear();
+    let done = 0;
+    for (const h of hashes) {
+      const s = allStudents.find(x => x.nameHash === h && x.status === "approved");
+      if (!s) continue;                                   // registered / approved nahi -> skip
+      try {
+        await syncStudentAttendance(h, s.normName || s.fullName || "", attCache);
+        done++;
+      } catch (e) {
+        console.error("[REQ] auto-sync failed:", e);
+        toast("⚠️ Auto-sync failed: " + (e.code || e.message), 5000);
+      }
+    }
+    if (done) toast("🔄 Student attendance updated", 2200);
+  });
+}
+
+function startAutoSync() {
+  if (attUnsub) return;
+  const adminDb = window.bsAdminDb;
+  if (!adminDb) {
+    if (attRetry++ < 20) setTimeout(startAutoSync, 1000);
+    return;
+  }
+  attUnsub = onSnapshot(collection(adminDb, "attendance"), async snap => {
+    if (!attReady) {                                      // pehli baar: sirf cache bharo
+      snap.docs.forEach(d => attCache.set(d.id, d.data()));
+      attReady = true;
+      return;
+    }
+    const jobs = [];
+    for (const ch of snap.docChanges()) {
+      const old = attCache.get(ch.doc.id);
+      const now = ch.type === "removed" ? null : ch.doc.data();
+      if (now) attCache.set(ch.doc.id, now); else attCache.delete(ch.doc.id);
+      jobs.push([old, now]);
+    }
+    for (const [o, n] of jobs) { await markDirtyFrom(o); await markDirtyFrom(n); }
+    if (dirtyHashes.size) { clearTimeout(flushTimer); flushTimer = setTimeout(flushDirty, 1500); }
+  }, err => console.error("[REQ] auto-sync listener:", err));
+}
+
+function stopAutoSync() {
+  if (attUnsub) { attUnsub(); attUnsub = null; }
+  attCache.clear(); dirtyHashes.clear(); attReady = false; attRetry = 0;
+  clearTimeout(flushTimer);
 }
 
 // ── Toast ─────────────────────────────────────────────────────
@@ -472,6 +549,7 @@ function attachAuthListener() {
         requestsBadge.style.display = "none";
         closePanel();
         if (unsubUsers) { unsubUsers(); unsubUsers = null; }
+        stopAutoSync();
         try { studentAuth.signOut(); } catch (_) {}
       }
     });
@@ -486,6 +564,7 @@ attachAuthListener();
 async function startListener() {
   if (unsubUsers) return;
   if (!(await ensureStudentAuth())) return;
+  startAutoSync();
   unsubUsers = onSnapshot(
     collection(studentDb, "users"),
     snap => {

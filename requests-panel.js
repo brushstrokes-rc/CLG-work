@@ -130,6 +130,12 @@ async function syncStudentAttendance(nameHash, normName) {
   const attSnap = await getDocs(collection(adminDb, "attendance"));
 
   const monthMap = new Map();
+  const seenNames = new Set();
+  const hashCache = new Map();
+  const hashOf = async k => {
+    if (!hashCache.has(k)) hashCache.set(k, await computeNameHash(k));
+    return hashCache.get(k);
+  };
 
   for (const attDoc of attSnap.docs) {
     const docId  = attDoc.id;
@@ -142,7 +148,8 @@ async function syncStudentAttendance(nameHash, normName) {
     for (const [key, value] of Object.entries(data)) {
       if (key.startsWith("_")) continue;
       if (value !== "present" && value !== "half") continue;
-      const keyHash = await computeNameHash(key);
+      seenNames.add(key);
+      const keyHash = await hashOf(key);
       if (keyHash !== nameHash) continue;
       const mk = monthKey(date);
       if (!monthMap.has(mk)) monthMap.set(mk, { sessions: {} });
@@ -187,7 +194,11 @@ async function syncStudentAttendance(nameHash, normName) {
       totalSessions: total, normName, lastUpdated: serverTimestamp() },
     { merge: true }
   );
-  return { total, present, half, absent: total-present-half };
+  // names in the admin attendance data that look like this student (helps spot spelling mismatches)
+  const words = String(normName || "").toLowerCase().split(/\s+/).filter(w => w.length >= 3);
+  const candidates = [...seenNames].filter(k => words.some(w => k.toLowerCase().includes(w))).slice(0, 6);
+  console.log("[REQ] sync:", { adminDocs: attSnap.size, matchedSessions: total, looksLike: candidates });
+  return { total, present, half, absent: total-present-half, docs: attSnap.size, candidates };
 }
 
 // ── Toast ─────────────────────────────────────────────────────
@@ -201,6 +212,19 @@ function toast(msg, dur = 2800) {
     setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.style.display="none", 400); }, dur);
   } else {
     console.log("REQUESTS:", msg);
+    let box = document.getElementById("reqToastBox");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "reqToastBox";
+      box.style.cssText = "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:92vw;" +
+        "background:#2a1a0e;color:#fff;padding:10px 16px;border-radius:12px;font:600 .85rem Nunito,sans-serif;" +
+        "z-index:99999;box-shadow:0 6px 20px rgba(0,0,0,.3);display:none;text-align:center";
+      document.body.appendChild(box);
+    }
+    box.textContent = msg;
+    box.style.display = "block";
+    clearTimeout(box._t);
+    box._t = setTimeout(() => { box.style.display = "none"; }, dur);
   }
 }
 
@@ -310,7 +334,12 @@ function renderPanel() {
         resyncBtn.disabled=true; resyncBtn.textContent="Syncing…";
         try {
           const r = await syncStudentAttendance(s.nameHash, s.normName||s.fullName||"");
-          toast(`✅ Synced: ${r.total} sessions (${r.present}P/${r.half}H/${r.absent}A)`);
+          if (r.total === 0) {
+            toast(`⚠️ 0 sessions mile (admin attendance docs: ${r.docs}). Admin list mein milte-julte naam: ` +
+                  (r.candidates.length ? r.candidates.join(", ") : "koi nahi"), 12000);
+          } else {
+            toast(`✅ Synced: ${r.total} sessions (${r.present}P/${r.half}H/${r.absent}A)`, 6000);
+          }
         } catch(err) { toast("Sync failed: "+(err.message||""),4000); }
         resyncBtn.disabled=false; resyncBtn.textContent="🔄 Sync";
       });

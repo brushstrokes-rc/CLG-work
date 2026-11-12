@@ -318,6 +318,14 @@ let attCache = new Map(), coreCache = new Map();
 let attUnsub = null, coreUnsub = null, attReady = false, coreReady = false;
 let flushTimer = null, flushChain = Promise.resolve(), attRetry = 0;
 
+let syncStatus = "Auto-sync: shuru nahi hua";
+function setSyncStatus(msg) {
+  syncStatus = msg;
+  console.log("[REQ] " + msg);
+  const el = document.getElementById("reqSyncStatus");
+  if (el) el.textContent = msg;
+}
+
 function scheduleFlush() {
   if (!attReady || !coreReady) return;
   clearTimeout(flushTimer);
@@ -328,21 +336,30 @@ function flushAll() {
   flushChain = flushChain.then(async () => {
     if (!attReady || !coreReady) return;
     const students = allStudents.filter(s => s.status === "approved" && s.nameHash);
-    if (!students.length) return;
+    if (!students.length) { setSyncStatus("Auto-sync ON, par koi approved student nahi"); return; }
     try {
       const mainList = mainSessionsOf(attCache), coreList = coreSessionsOf(coreCache);
       await attachHashes(mainList); await attachHashes(coreList);
       const known = await knownNames(mainList, coreList), coreHashes = await coreHashSet();
-      let changed = 0;
+      let changed = 0; const unmatched = []; const rows = [];
       for (const s of students) {
         const r = await syncWithLists(s.nameHash, s.normName || s.fullName || "",
                                       mainList, coreList, known, coreHashes, attCache.size);
         if (r.wrote) changed++;
+        if (!r.nameMatched) unmatched.push(s.fullName || s.normName);
+        rows.push({ student: s.fullName, core: r.isCore, matched: r.nameMatched,
+                    sessions: r.total, P: r.present, H: r.half, A: r.absent, wrote: r.wrote });
       }
+      console.table(rows);
+      const t = new Date().toLocaleTimeString();
+      setSyncStatus(`Auto-sync ON · ${t} · main ${mainList.length} + core ${coreList.length} sessions · ` +
+        `${students.length} students, ${changed} update hue` +
+        (unmatched.length ? ` · ⚠️ naam match nahi: ${unmatched.join(", ")}` : ""));
       if (changed) toast("🔄 Student attendance updated", 2200);
     } catch (e) {
       console.error("[REQ] auto-sync failed:", e);
-      toast("⚠️ Auto-sync failed: " + (e.code || e.message), 5000);
+      setSyncStatus("⚠️ Auto-sync error: " + (e.code || e.message));
+      toast("⚠️ Auto-sync failed: " + (e.code || e.message), 6000);
     }
   });
 }
@@ -351,17 +368,23 @@ function startAutoSync() {
   if (attUnsub) return;
   const adminDb = window.bsAdminDb;
   if (!adminDb) {
-    if (attRetry++ < 20) setTimeout(startAutoSync, 1000);
+    if (attRetry++ < 20) { setSyncStatus("Auto-sync: Admin DB ka intezaar…"); setTimeout(startAutoSync, 1000); }
+    else setSyncStatus("⚠️ Auto-sync band: Admin DB (window.bsAdminDb) nahi mila");
     return;
   }
+  setSyncStatus("Auto-sync: attendance load ho rahi hai…");
   attUnsub = onSnapshot(collection(adminDb, "attendance"), snap => {
     attCache = new Map(snap.docs.map(d => [d.id, d.data()]));
     attReady = true; scheduleFlush();
-  }, err => console.error("[REQ] attendance listener:", err));
+  }, err => { console.error("[REQ] attendance listener:", err); setSyncStatus("⚠️ attendance padh nahi paaye: " + (err.code || err.message)); });
   coreUnsub = onSnapshot(collection(adminDb, "core-attendance"), snap => {
     coreCache = new Map(snap.docs.map(d => [d.id, d.data()]));
     coreReady = true; scheduleFlush();
-  }, err => { console.error("[REQ] core-attendance listener:", err); coreReady = true; scheduleFlush(); });
+  }, err => {
+    console.error("[REQ] core-attendance listener:", err);
+    setSyncStatus("⚠️ core-attendance padh nahi paaye: " + (err.code || err.message));
+    coreReady = true; scheduleFlush();
+  });
 }
 
 function stopAutoSync() {
@@ -432,6 +455,8 @@ function renderPanel() {
   };
 
   requestsContent.innerHTML =
+    `<div id="reqSyncStatus" style="font:600 .72rem Nunito,sans-serif;color:#6b4c2a;background:rgba(92,15,32,.06);
+      border-radius:10px;padding:8px 10px;margin-bottom:6px;word-break:break-word">${esc(syncStatus)}</div>` +
     renderSection(`⏳ Pending (${pending.length})`,  pending,  "pending")  +
     renderSection(`✅ Approved (${approved.length})`, approved, "approved") +
     renderSection(`❌ Rejected (${rejected.length})`, rejected, "rejected");

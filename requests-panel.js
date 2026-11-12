@@ -121,14 +121,21 @@ function parseDocId(docId) {
 function safeKey(s)  { return String(s).replace(/[./]/g, "_"); }
 function monthKey(s) { return String(s || "").slice(0, 7); }
 
-// ── Sync one student's attendance ─────────────────────────────
+// ── Attendance sync: admin web -> student project ────────────
+// Sources (admin project):
+//   main = "attendance"        -> Members attendance page (drafts + saved events)
+//   core = "core-attendance"   -> Core Members attendance page (drafts + saved sessions)
+// Har student ke liye saare sessions bante hain (jisme present / half / absent teeno):
+//   - normal member : sirf main sessions
+//   - core member   : main + core sessions dono
 const hashCache = new Map();
 async function hashOf(k) {
   if (!hashCache.has(k)) hashCache.set(k, await computeNameHash(k));
   return hashCache.get(k);
 }
-// admin ke purane spelling aliases (agar brushstroke.js ne expose kiya ho)
 const canon = k => (typeof window.bsCanonName === "function" ? window.bsCanonName(k) : k);
+const CORE_ALIASES = { "Shaksham Katiyar": "Saksham Katiyar" };
+const coreCanon = k => CORE_ALIASES[k] || k;
 
 function stable(v) {
   if (v && typeof v === "object" && !Array.isArray(v)) {
@@ -137,42 +144,107 @@ function stable(v) {
   return JSON.stringify(v);
 }
 
-// docsMap: Map(docId -> data) of admin "attendance" collection (drafts + saved events)
-async function buildMonthMap(nameHash, docsMap, seenNames) {
-  const monthMap = new Map();
-  for (const [docId, data] of docsMap) {
-    const parsed = parseDocId(docId);
-    if (!parsed) continue;
-    const { date, mode } = parsed;
-    const title = typeof data._title === "string" ? data._title : "";
-    for (const [key, value] of Object.entries(data)) {
-      if (key.startsWith("_")) continue;
-      if (value !== "present" && value !== "half") continue;
-      const ck = canon(key);
-      if (ck !== key && ck in data) continue;          // naya naam doc mein ho toh wahi jeetta hai
-      if (seenNames) seenNames.add(ck);
-      if ((await hashOf(ck)) !== nameHash) continue;
-      const mk = monthKey(date);
-      if (!monthMap.has(mk)) monthMap.set(mk, { sessions: {} });
-      monthMap.get(mk).sessions[safeKey(docId)] = { date, mode, title, status: value, adminDocId: docId };
-    }
+// {name: "present"|"half"} (purani spelling ho toh naya naam; dono ho toh naya jeetta hai)
+function marksFromMap(map, canonFn) {
+  const out = {};
+  if (!map || typeof map !== "object") return out;
+  for (const [k, v] of Object.entries(map)) {
+    if (k.startsWith("_")) continue;
+    if (v !== "present" && v !== "half") continue;
+    const ck = canonFn(k);
+    if (ck !== k && ck in map) continue;
+    out[ck] = v;
   }
-  return monthMap;
+  return out;
 }
 
-async function writeStudentSummary(nameHash, normName, monthMap) {
-  const existing = await getDocs(collection(studentDb, "attendance_summary", nameHash, "months"));
-  const oldById = new Map();
-  existing.forEach(d => oldById.set(d.id, d));
+function mainSessionsOf(docsMap) {
+  const list = [];
+  for (const [id, data] of docsMap) {
+    const parsed = parseDocId(id);
+    if (!parsed) continue;
+    const marks = marksFromMap(data, canon);
+    const isEvent = /_ev_/.test(id);
+    if (!isEvent && !Object.keys(marks).length) continue;   // khaali draft / purana doc session nahi
+    list.push({
+      id, kind: "main", date: parsed.date, mode: parsed.mode,
+      title: typeof data._title === "string" ? data._title : "", marks
+    });
+  }
+  return list;
+}
+
+const CORE_DRAFT_RE = /^(\d{4}-\d{2}-\d{2})_(online|offline)_draft$/;
+const CORE_SAVED_RE = /^(\d{4}-\d{2}-\d{2})(?:_(online|offline)_cm_[a-z0-9]+)?$/;
+function coreSessionsOf(docsMap) {
+  const list = [];
+  for (const [id, d] of docsMap) {
+    const dm = id.match(CORE_DRAFT_RE);
+    if (dm) {                                              // draft: {state:{name:status}}
+      const marks = marksFromMap(d && d.state, coreCanon);
+      if (!Object.keys(marks).length) continue;
+      list.push({ id, kind: "core", date: dm[1], mode: dm[2], title: "", marks });
+      continue;
+    }
+    const sm = id.match(CORE_SAVED_RE);                    // saved: {title, mode, members:[{name,status}]}
+    if (!sm) continue;
+    const data = d || {};
+    const marks = {};
+    (Array.isArray(data.members) ? data.members : []).forEach(m => {
+      if (m && (m.status === "present" || m.status === "half")) marks[coreCanon(m.name)] = m.status;
+    });
+    const mode = (data.mode === "online" || data.mode === "offline") ? data.mode : (sm[2] || "online");
+    list.push({ id, kind: "core", date: sm[1], mode, title: data.title || "", marks });
+  }
+  return list;
+}
+
+async function attachHashes(list) {
+  for (const s of list) {
+    s.hm = new Map();
+    for (const [nm, st] of Object.entries(s.marks)) s.hm.set(await hashOf(nm), st);
+  }
+}
+
+async function knownNames(mainList, coreList) {
+  const names = new Set();
+  (window.bsStudentNames || []).forEach(n => names.add(canon(n)));
+  (window.bsCoreMemberNames || []).forEach(n => names.add(n));
+  mainList.concat(coreList).forEach(s => Object.keys(s.marks).forEach(n => names.add(n)));
+  const hashes = new Set();
+  for (const n of names) hashes.add(await hashOf(n));
+  return { names, hashes };
+}
+async function coreHashSet() {
+  const set = new Set();
+  for (const n of (window.bsCoreMemberNames || [])) set.add(await hashOf(n));
+  return set;
+}
+
+// pichhli baar student project me kya likha tha (bekaar reads/writes bachane ke liye)
+const lastWritten = new Map();   // nameHash -> { months: Map(mk -> stableStr), summary: stableStr }
+
+async function writeStudentSummary(nameHash, normName, monthMap, extra) {
+  let prev = lastWritten.get(nameHash);
+  let prevMonths;
+  if (prev) prevMonths = prev.months;
+  else {
+    prevMonths = new Map();
+    const ex = await getDocs(collection(studentDb, "attendance_summary", nameHash, "months"));
+    ex.forEach(d => prevMonths.set(d.id, stable(d.data().sessions || {})));
+  }
+  const newMonths = new Map();
+  for (const [mk, md] of monthMap) newMonths.set(mk, stable(md.sessions));
 
   const wb = writeBatch(studentDb);
   let ops = 0;
-  oldById.forEach((d, mk) => { if (!monthMap.has(mk)) { wb.delete(d.ref); ops++; } });
-  for (const [mk, md] of monthMap) {
-    const old = oldById.get(mk);
-    if (!old || stable(old.data().sessions || {}) !== stable(md.sessions)) {
+  for (const mk of prevMonths.keys()) {
+    if (!newMonths.has(mk)) { wb.delete(doc(studentDb, "attendance_summary", nameHash, "months", mk)); ops++; }
+  }
+  for (const [mk, str] of newMonths) {
+    if (prevMonths.get(mk) !== str) {
       wb.set(doc(studentDb, "attendance_summary", nameHash, "months", mk),
-             { sessions: md.sessions, lastUpdated: serverTimestamp() });
+             { sessions: monthMap.get(mk).sessions, lastUpdated: serverTimestamp() });
       ops++;
     }
   }
@@ -186,64 +258,92 @@ async function writeStudentSummary(nameHash, normName, monthMap) {
       else if (s.status === "half") half++;
     }
   }
-  await setDoc(
-    doc(studentDb, "attendance_summary", nameHash),
-    { presentCount: present, halfCount: half, absentCount: total - present - half,
-      totalSessions: total, normName, lastUpdated: serverTimestamp() },
-    { merge: true }
-  );
-  return { total, present, half, absent: total - present - half };
-}
-
-// docsMap optional: na ho toh admin DB se padh leta hai (Sync button / approve)
-async function syncStudentAttendance(nameHash, normName, docsMap) {
-  const adminDb = window.bsAdminDb;
-  if (!docsMap) {
-    if (!adminDb) throw new Error("Admin DB not ready");
-    const snap = await getDocs(collection(adminDb, "attendance"));
-    docsMap = new Map(snap.docs.map(d => [d.id, d.data()]));
+  const summary = {
+    presentCount: present, halfCount: half, absentCount: total - present - half,
+    totalSessions: total, normName, isCore: !!extra.isCore, nameMatched: !!extra.nameMatched
+  };
+  const sumStr = stable(summary);
+  let wrote = ops > 0;
+  if (!prev || prev.summary !== sumStr) {
+    await setDoc(doc(studentDb, "attendance_summary", nameHash),
+                 { ...summary, lastUpdated: serverTimestamp() }, { merge: true });
+    wrote = true;
   }
-  const seen = new Set();
-  const monthMap = await buildMonthMap(nameHash, docsMap, seen);
-  const r = await writeStudentSummary(nameHash, normName, monthMap);
-
-  const words = String(normName || "").toLowerCase().split(/\s+/).filter(w => w.length >= 3);
-  const candidates = [...seen].filter(k => words.some(w => k.toLowerCase().includes(w))).slice(0, 6);
-  console.log("[REQ] sync:", { adminDocs: docsMap.size, matchedSessions: r.total, looksLike: candidates });
-  return { ...r, docs: docsMap.size, candidates };
+  lastWritten.set(nameHash, { months: newMonths, summary: sumStr });
+  return { total, present, half, absent: total - present - half, wrote };
 }
 
-// ── Auto-sync: admin me attendance badalte hi student data update ─
-const attCache    = new Map();   // docId -> data (admin "attendance")
-const dirtyHashes = new Set();   // jin students ka data badla
-let attUnsub = null, attReady = false, flushTimer = null, flushChain = Promise.resolve(), attRetry = 0;
-
-async function markDirtyFrom(data) {
-  if (!data) return;
-  for (const [key, value] of Object.entries(data)) {
-    if (key.startsWith("_")) continue;
-    if (value !== "present" && value !== "half") continue;
-    dirtyHashes.add(await hashOf(canon(key)));
-  }
-}
-
-function flushDirty() {
-  flushChain = flushChain.then(async () => {
-    const hashes = [...dirtyHashes];
-    dirtyHashes.clear();
-    let done = 0;
-    for (const h of hashes) {
-      const s = allStudents.find(x => x.nameHash === h && x.status === "approved");
-      if (!s) continue;                                   // registered / approved nahi -> skip
-      try {
-        await syncStudentAttendance(h, s.normName || s.fullName || "", attCache);
-        done++;
-      } catch (e) {
-        console.error("[REQ] auto-sync failed:", e);
-        toast("⚠️ Auto-sync failed: " + (e.code || e.message), 5000);
-      }
+async function syncWithLists(nameHash, normName, mainList, coreList, known, coreHashes, docsCount) {
+  const nameMatched = known.hashes.has(nameHash);
+  const isCore = coreHashes.has(nameHash);
+  const monthMap = new Map();
+  if (nameMatched) {
+    const list = isCore ? mainList.concat(coreList) : mainList;
+    for (const s of list) {
+      const status = s.hm.get(nameHash) || "absent";
+      const mk = monthKey(s.date);
+      if (!monthMap.has(mk)) monthMap.set(mk, { sessions: {} });
+      monthMap.get(mk).sessions[safeKey((s.kind === "core" ? "core_" : "") + s.id)] = {
+        date: s.date, mode: s.mode, title: s.title, status, kind: s.kind, adminDocId: s.id
+      };
     }
-    if (done) toast("🔄 Student attendance updated", 2200);
+  }
+  const r = await writeStudentSummary(nameHash, normName, monthMap, { isCore, nameMatched });
+  const words = String(normName || "").toLowerCase().split(/\s+/).filter(w => w.length >= 3);
+  const candidates = [...known.names].filter(k => words.some(w => k.toLowerCase().includes(w))).slice(0, 6);
+  return { ...r, docs: docsCount, nameMatched, isCore, candidates };
+}
+
+// Sync button / approve: admin DB se taaza padhkar ek student sync
+async function syncStudentAttendance(nameHash, normName) {
+  const adminDb = window.bsAdminDb;
+  if (!adminDb) throw new Error("Admin DB not ready");
+  const [a, c] = await Promise.all([
+    getDocs(collection(adminDb, "attendance")),
+    getDocs(collection(adminDb, "core-attendance"))
+  ]);
+  const mainMap = new Map(a.docs.map(d => [d.id, d.data()]));
+  const coreMap = new Map(c.docs.map(d => [d.id, d.data()]));
+  const mainList = mainSessionsOf(mainMap), coreList = coreSessionsOf(coreMap);
+  await attachHashes(mainList); await attachHashes(coreList);
+  lastWritten.delete(nameHash);                            // pehle server se compare karo
+  const r = await syncWithLists(nameHash, normName, mainList, coreList,
+    await knownNames(mainList, coreList), await coreHashSet(), mainMap.size);
+  console.log("[REQ] sync:", { mainDocs: mainMap.size, coreDocs: coreMap.size, ...r });
+  return r;
+}
+
+// ── Auto-sync: admin me attendance (main ya core) badalte hi student data update ─
+let attCache = new Map(), coreCache = new Map();
+let attUnsub = null, coreUnsub = null, attReady = false, coreReady = false;
+let flushTimer = null, flushChain = Promise.resolve(), attRetry = 0;
+
+function scheduleFlush() {
+  if (!attReady || !coreReady) return;
+  clearTimeout(flushTimer);
+  flushTimer = setTimeout(flushAll, 1500);
+}
+
+function flushAll() {
+  flushChain = flushChain.then(async () => {
+    if (!attReady || !coreReady) return;
+    const students = allStudents.filter(s => s.status === "approved" && s.nameHash);
+    if (!students.length) return;
+    try {
+      const mainList = mainSessionsOf(attCache), coreList = coreSessionsOf(coreCache);
+      await attachHashes(mainList); await attachHashes(coreList);
+      const known = await knownNames(mainList, coreList), coreHashes = await coreHashSet();
+      let changed = 0;
+      for (const s of students) {
+        const r = await syncWithLists(s.nameHash, s.normName || s.fullName || "",
+                                      mainList, coreList, known, coreHashes, attCache.size);
+        if (r.wrote) changed++;
+      }
+      if (changed) toast("🔄 Student attendance updated", 2200);
+    } catch (e) {
+      console.error("[REQ] auto-sync failed:", e);
+      toast("⚠️ Auto-sync failed: " + (e.code || e.message), 5000);
+    }
   });
 }
 
@@ -254,27 +354,22 @@ function startAutoSync() {
     if (attRetry++ < 20) setTimeout(startAutoSync, 1000);
     return;
   }
-  attUnsub = onSnapshot(collection(adminDb, "attendance"), async snap => {
-    if (!attReady) {                                      // pehli baar: sirf cache bharo
-      snap.docs.forEach(d => attCache.set(d.id, d.data()));
-      attReady = true;
-      return;
-    }
-    const jobs = [];
-    for (const ch of snap.docChanges()) {
-      const old = attCache.get(ch.doc.id);
-      const now = ch.type === "removed" ? null : ch.doc.data();
-      if (now) attCache.set(ch.doc.id, now); else attCache.delete(ch.doc.id);
-      jobs.push([old, now]);
-    }
-    for (const [o, n] of jobs) { await markDirtyFrom(o); await markDirtyFrom(n); }
-    if (dirtyHashes.size) { clearTimeout(flushTimer); flushTimer = setTimeout(flushDirty, 1500); }
-  }, err => console.error("[REQ] auto-sync listener:", err));
+  attUnsub = onSnapshot(collection(adminDb, "attendance"), snap => {
+    attCache = new Map(snap.docs.map(d => [d.id, d.data()]));
+    attReady = true; scheduleFlush();
+  }, err => console.error("[REQ] attendance listener:", err));
+  coreUnsub = onSnapshot(collection(adminDb, "core-attendance"), snap => {
+    coreCache = new Map(snap.docs.map(d => [d.id, d.data()]));
+    coreReady = true; scheduleFlush();
+  }, err => { console.error("[REQ] core-attendance listener:", err); coreReady = true; scheduleFlush(); });
 }
 
 function stopAutoSync() {
-  if (attUnsub) { attUnsub(); attUnsub = null; }
-  attCache.clear(); dirtyHashes.clear(); attReady = false; attRetry = 0;
+  if (attUnsub)  { attUnsub();  attUnsub = null; }
+  if (coreUnsub) { coreUnsub(); coreUnsub = null; }
+  attCache = new Map(); coreCache = new Map();
+  attReady = false; coreReady = false; attRetry = 0;
+  lastWritten.clear();
   clearTimeout(flushTimer);
 }
 
@@ -411,11 +506,12 @@ function renderPanel() {
         resyncBtn.disabled=true; resyncBtn.textContent="Syncing…";
         try {
           const r = await syncStudentAttendance(s.nameHash, s.normName||s.fullName||"");
-          if (r.total === 0) {
-            toast(`⚠️ 0 sessions mile (admin attendance docs: ${r.docs}). Admin list mein milte-julte naam: ` +
-                  (r.candidates.length ? r.candidates.join(", ") : "koi nahi"), 12000);
+          if (!r.nameMatched) {
+            toast("⚠️ Naam admin ki list mein nahi mila. Milte-julte naam: " +
+                  (r.candidates.length ? r.candidates.join(", ") : "koi nahi") +
+                  " — student ka naam admin list jaisa hona chahiye.", 12000);
           } else {
-            toast(`✅ Synced: ${r.total} sessions (${r.present}P/${r.half}H/${r.absent}A)`, 6000);
+            toast(`✅ Synced${r.isCore ? " (Core + Main)" : ""}: ${r.total} sessions (${r.present}P/${r.half}H/${r.absent}A)`, 6000);
           }
         } catch(err) { toast("Sync failed: "+(err.message||""),4000); }
         resyncBtn.disabled=false; resyncBtn.textContent="🔄 Sync";
@@ -569,6 +665,7 @@ async function startListener() {
     collection(studentDb, "users"),
     snap => {
       console.log("[REQ] users docs received:", snap.size);
+      setTimeout(scheduleFlush, 0);
       allStudents = snap.docs
         .map(d => ({ uid: d.id, ...d.data() }))
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
